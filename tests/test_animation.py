@@ -63,7 +63,7 @@ def jouer(animation, noyau, monkeypatch, enregistre_si, **reglages):
             self.vue = vue
             self.rayon = 50.0
 
-        def preparer(self, reglages, duree):
+        def preparer(self, reglages, duree, boite=None):
             return noyau.Trajet((0, 0, 1), (100, 0, 0), (0, 0, 0), (0, 0, 0), 100, 35, 0)
 
         def _appliquer(self, pose, etendue=None):

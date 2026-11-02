@@ -1,0 +1,10 @@
+{
+	"autodeskProduct": "Fusion360",
+	"type": "script",
+	"author": "lmchd-romain",
+	"description": {
+		"": "Sonde : déplacer des pièces dans un storyboard de l'espace Animation, par le complément."
+	},
+	"supportedOS": "windows",
+	"editEnabled": true
+}

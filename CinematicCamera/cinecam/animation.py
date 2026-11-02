@@ -65,7 +65,7 @@ def _commandes_enregistrement(ui) -> list[str]:
     return trouves[:40]
 
 
-def etapes(app, reglages: noyau.Reglages, log, resultat: dict):
+def etapes(app, reglages: noyau.Reglages, log, resultat: dict, boite=None):
     """Générateur : crée le storyboard pas à pas. Remplit `resultat` (duree, vues, methode) en cas de succès.
 
     Lève ErreurAnimation (message pour l'utilisateur) si Fusion n'enregistre pas les vues.
@@ -87,7 +87,7 @@ def etapes(app, reglages: noyau.Reglages, log, resultat: dict):
              getattr(gestion, "recordingMode", "?"))
 
     pilote = PiloteCamera(app, log)
-    trajet = pilote.preparer(reglages, 0.0)     # repère du modèle, vu du côté de la vue de départ
+    trajet = pilote.preparer(reglages, 0.0, boite)   # repère du modèle (ou des pièces choisies)
     if trajet is None:
         raise ErreurAnimation("Aucune vue active.")
     mouvement = mouvements.PAR_NOM.get(reglages.anim_mouvement, mouvements.CATALOGUE[0])

@@ -20,6 +20,14 @@ Add-in Fusion : la vue tourne lentement autour du modèle, en douceur, comme une
   | Balancier | va-et-vient de ±40°, comme un présentoir ; boucle | 20 s |
   | Travelling latéral | glisse en ligne droite le long du modèle | 10 s |
   | Vue de dessus tournante | presque à la verticale, demi-tour | 20 s |
+  | Quatre faces | quart de tour, pause, quatre fois ; boucle | 20 s |
+  | Contre-plongée héroïque | caméra basse qui s'approche : modèle imposant | 8 s |
+  | Approche lente | avance tout droit, de loin à tout près | 8 s |
+  | Orbite en 8 | dessine un huit autour du modèle ; boucle | 24 s |
+  | Descente en tornade | part du zénith, descend en spirale d'un tour et demi | 14 s |
+
+  **Cadrer sur** (facultatif) : choisir une ou plusieurs pièces ; le mouvement tourne autour d'elles au
+  lieu du modèle entier (avec « Approche lente » : gros plan sur un détail).
 
   Durée : plus long = caméra plus lente. Zoom : 100 % = modèle entier, 200 % = deux fois plus près. Le
   mouvement part du côté où la vue est tournée au moment du clic.

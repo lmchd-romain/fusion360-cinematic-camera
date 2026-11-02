@@ -26,4 +26,5 @@ __pycache__/
 reglages.json
 essai/resultats/*.json
 !essai/resultats/recette-*.json
+!essai/resultats/sonde-pieces-*.json
 essai/resultats/*.marqueur

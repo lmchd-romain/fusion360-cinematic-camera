@@ -1,6 +1,6 @@
 # État — Caméra cinématique (CinematicCamera)
 
-Mis à jour le 2026-11-02 (0.3.0 : mouvements d'animation, dialogue avant création, onglet ANIMATION).
+Mis à jour le 2026-11-02 (0.4.0 : 13 mouvements, « Cadrer sur », sonde du mouvement des pièces).
 
 ## Historique
 
@@ -30,6 +30,28 @@ Mis à jour le 2026-11-02 (0.3.0 : mouvements d'animation, dialogue avant créat
 | W5 | Edit supercar | six plans, coupes franches (pas de glissé de 0,04 s visible) |
 | W6 | Zoom 200 % puis 50 % | deux fois plus près, puis plus loin |
 | W7 | Platine, spirale, balancier en lecture en boucle | aucun à-coup au raccord |
+
+## 0.4.0 — à vérifier dans Fusion [supposé]
+
+| Code | Geste | Attendu |
+|---|---|---|
+| X1 | Les 5 nouveaux mouvements (quatre faces, héroïque, approche, huit, tornade) | lecture fluide, modèle cadré |
+| X2 | « Cadrer sur » une poignée ou un tiroir + Approche lente | gros plan qui finit sur la pièce |
+| X3 | Sonde pièces (`essai/sonde_pieces/MESSAGE.md` dans Claude Desktop) | rapport `essai/resultats/sonde-pieces-*.json` |
+
+## Mouvement des pièces (éclaté, ordre de montage, portes, tiroirs, couvercle)
+
+L'API Animation publique (mai 2026) ne donne que storyboards, tête de lecture et enregistrement des vues :
+aucune action de pièce documentée (transformer, éclater, afficher / masquer). Deux voies à trancher par la
+sonde `essai/sonde_pieces` :
+
+1. **Dans le storyboard** : si une pièce déplacée par le complément (`transform2`), tête de lecture posée,
+   devient une action (Q1/Q2), ou si l'éclatement natif se lance sur une sélection (Q5) → éclaté, ordre de
+   montage, couvercle de flight-case, tiroirs et portes, tous en vraies animations Fusion, exportables en
+   vidéo.
+2. **Sinon, présentation en direct** dans l'espace Conception : les pièces bougent à l'écran (30 images/s),
+   puis tout revient exactement à sa place, sans rien enregistrer dans le design. Vidéo par capture d'écran
+   (Windows : Win + Alt + R). Portes et tiroirs : par leurs liaisons (pivot, glissière) et leurs limites.
 
 ## 0.2.0 — nouveautés à vérifier dans Fusion [supposé]
 

@@ -92,6 +92,23 @@ def _dessus(u):
     return Cadre(180.0 * u, 80.0, 1.1)
 
 
+def _quatre_faces(u):
+    """Quatre quarts de tour, chacun suivi d'une pause : 70 % du temps en mouvement, 30 % à l'arrêt."""
+    k = min(3, int(u * 4))
+    v = u * 4 - k
+    return Cadre(90.0 * (k + doux(v / 0.7)), 30.0)
+
+
+def _huit(u):
+    w = 2 * math.pi * u
+    return Cadre(50.0 * math.sin(w), 25.0 + 15.0 * math.sin(2 * w), 1.0)
+
+
+def _tornade(u):
+    s = doux(u)
+    return Cadre(540.0 * s, 84.0 - 69.0 * s, 1.45 - 0.5 * s)
+
+
 CATALOGUE: tuple[Mouvement, ...] = (
     Mouvement("platine", "Platine (tour complet)",
               "La vue fait un tour complet à vitesse constante, vue de trois-quarts. Boucle sans à-coup.",
@@ -129,6 +146,22 @@ CATALOGUE: tuple[Mouvement, ...] = (
     Mouvement("dessus", "Vue de dessus tournante",
               "Vue presque à la verticale qui tourne d'un demi-tour, comme un plan de drone au zénith.",
               20.0, (Segment(1, _dessus),)),
+    Mouvement("quatre_faces", "Quatre faces (tourne et s'arrête)",
+              "Un quart de tour, une pause, quatre fois : chaque face se montre. Boucle sans à-coup.",
+              20.0, (Segment(1, _quatre_faces),), boucle=True),
+    Mouvement("heroique", "Contre-plongée héroïque",
+              "Caméra basse qui s'approche en tournant légèrement : le modèle paraît imposant.",
+              8.0, (Segment(1, glisse(Cadre(-25, 3, 1.0, (0, 0, -0.25)), Cadre(15, 9, 0.7, (0, 0, -0.1)))),)),
+    Mouvement("approche", "Approche lente",
+              "La caméra avance tout droit vers le modèle, de loin à tout près. Avec « Cadrer sur », "
+              "elle va vers la pièce choisie.",
+              8.0, (Segment(1, glisse(Cadre(30, 22, 1.3), Cadre(30, 22, 0.45))),)),
+    Mouvement("huit", "Orbite en 8",
+              "La caméra dessine un huit autour du modèle : va-et-vient en montant et descendant. Boucle.",
+              24.0, (Segment(1, _huit),), boucle=True),
+    Mouvement("tornade", "Descente en tornade",
+              "Part du zénith et descend en spirale d'un tour et demi jusqu'à une vue de trois-quarts.",
+              14.0, (Segment(1, _tornade),)),
 )
 
 PAR_NOM = {m.nom: m for m in CATALOGUE}

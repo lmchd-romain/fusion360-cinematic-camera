@@ -72,6 +72,22 @@ def boite_modele(app) -> tuple[noyau.Vec, noyau.Vec] | None:
     return mini, maxi
 
 
+def boite_de(entites) -> tuple[noyau.Vec, noyau.Vec] | None:
+    """Boîte qui englobe des occurrences ou des corps choisis (coordonnées du monde), ou None."""
+    mini, maxi = None, None
+    for e in entites:
+        try:
+            b = e.boundingBox
+            a, z = _vec(b.minPoint), _vec(b.maxPoint)
+        except Exception:
+            continue
+        mini = a if mini is None else tuple(min(x, y) for x, y in zip(mini, a))
+        maxi = z if maxi is None else tuple(max(x, y) for x, y in zip(maxi, z))
+    if mini is None or noyau.norme(noyau.soustrait(maxi, mini)) < 1e-9:
+        return None
+    return mini, maxi
+
+
 def centre_modele(app) -> noyau.Vec | None:
     """Centre de la boîte englobante du composant racine, ou None."""
     boite = boite_modele(app)
@@ -128,7 +144,8 @@ class PiloteCamera:
             cam.viewExtents = etendue
         self.vue.camera = cam
 
-    def preparer(self, reglages: noyau.Reglages, duree_voyage_s: float) -> noyau.Trajet | None:
+    def preparer(self, reglages: noyau.Reglages, duree_voyage_s: float,
+                 boite: tuple[noyau.Vec, noyau.Vec] | None = None) -> noyau.Trajet | None:
         """Trajet de la vue active vers le cadrage, sans toucher à la vue.
 
         Pas de cadrage d'essai par `isFitView` : Fusion peut l'appliquer d'un coup à l'écran, et la vue
@@ -148,7 +165,8 @@ class PiloteCamera:
         cible1, distance1, etendue0, etendue1 = cible, distance0, None, None
         if ortho:
             etendue0 = etendue1 = avant.viewExtents
-        boite = boite_modele(self.app) if reglages.cadrer else None
+        if boite is None:
+            boite = boite_modele(self.app) if reglages.cadrer else None
         self.rayon = distance0 / 3
         if boite:
             cible1, rayon = noyau.cadrage(*boite)

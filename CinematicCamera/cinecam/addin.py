@@ -10,7 +10,7 @@ from pathlib import Path
 import adsk.core
 
 from . import mouvements, noyau, reglages_fichier
-from .fusion_camera import PiloteCamera
+from .fusion_camera import PiloteCamera, boite_de
 from .inactivite import creer_lecteur, creer_lecteur_appuis
 from .journal import journal, fermer
 
@@ -222,7 +222,7 @@ class GestionReglagesFin(adsk.core.CommandEventHandler):
 
 
 # ---------------------------------------------------------------- animation
-IN_MOUVEMENT, IN_DUREE, IN_ZOOM = "mouvement", "duree", "zoom"
+IN_MOUVEMENT, IN_DUREE, IN_ZOOM, IN_CIBLE = "mouvement", "duree", "zoom", "cible"
 
 
 class GestionAnimation(adsk.core.CommandCreatedEventHandler):
@@ -248,6 +248,11 @@ class GestionAnimation(adsk.core.CommandCreatedEventHandler):
             zoom = inputs.addIntegerSpinnerCommandInput(IN_ZOOM, "Zoom (%)", 50, 300, 10,
                                                         int(round(r.anim_zoom_pct)))
             zoom.tooltip = "100 % = modèle entier à l'image ; 200 % = deux fois plus près ; 50 % = plus loin."
+            cible = inputs.addSelectionInput(IN_CIBLE, "Cadrer sur", "Pièces à filmer (facultatif)")
+            cible.addSelectionFilter("Occurrences")
+            cible.addSelectionFilter("SolidBodies")
+            cible.setSelectionLimits(0, 0)
+            cible.tooltip = "Facultatif : choisir une ou plusieurs pièces. Sans choix, le modèle entier."
             for h, ev in ((GestionAnimationChange(), cmd.inputChanged), (GestionAnimationOK(), cmd.execute),
                           (GestionReglagesFin(), cmd.destroy)):
                 ev.add(h)
@@ -294,9 +299,11 @@ class GestionAnimationOK(adsk.core.CommandEventHandler):
             reglages_fichier.ecrire(FICHIER_REGLAGES, r)
             if machine.etat == noyau.ROTATION:
                 _appliquer(machine._arreter(time.monotonic()))
+            sel = adsk.core.SelectionCommandInput.cast(inputs.itemById(IN_CIBLE))
+            boite = boite_de([sel.selection(i).entity for i in range(sel.selectionCount)]) if sel else None
             animation.verifier(_etat["app"])
             _etat["animation_resultat"] = {}
-            _etat["animation"] = animation.etapes(_etat["app"], r, journal(), _etat["animation_resultat"])
+            _etat["animation"] = animation.etapes(_etat["app"], r, journal(), _etat["animation_resultat"], boite)
             _relancer_le_fil()
             journal().info("animation demandée : %s, %.0f s, zoom %.0f %%", r.anim_mouvement, r.anim_duree_s,
                            r.anim_zoom_pct)

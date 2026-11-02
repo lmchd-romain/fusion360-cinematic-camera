@@ -20,3 +20,7 @@ Décisions produit (**décidé** = Romain ; **mon choix** = l'agent, contestable
 - 2026-11-02 (mon choix, à essayer) : huit mouvements : platine, spirale, drone, révélation supercar, edit
   supercar (montage coupé), balancier, travelling latéral, vue de dessus. Vitesse = durée du mouvement ; zoom
   50–300 %. Les mouvements ne servent qu'aux animations ; la rotation au bouton et en absence reste la platine.
+- 2026-11-02 (mon choix, à essayer) : cinq mouvements de plus (quatre faces, contre-plongée héroïque, approche
+  lente, orbite en 8, descente en tornade) et « Cadrer sur » des pièces choisies.
+- 2026-11-02 (ouvert) : animer les pièces (éclaté, ordre de montage, portes, tiroirs, couvercle de flight-case) :
+  voie choisie après la sonde `essai/sonde_pieces`.

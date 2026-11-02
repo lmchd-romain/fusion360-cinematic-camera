@@ -72,3 +72,24 @@ def test_reglages_d_animation_bornes_et_choix():
     r = n.Reglages.depuis_dict({"anim_mouvement": "EDIT", "anim_duree_s": 1, "anim_zoom_pct": 999})
     assert r.anim_mouvement == "edit" and r.anim_duree_s == 3 and r.anim_zoom_pct == 300
     assert n.Reglages.depuis_dict({"anim_mouvement": "inconnu"}).anim_mouvement == "platine"
+
+
+def test_boite_des_pieces_choisies():
+    import sys
+    import types
+
+    from tests import faux_adsk
+    if "adsk" not in sys.modules:
+        faux_adsk.installer()
+    from cinecam import fusion_camera as fc
+    P = lambda x, y, z: types.SimpleNamespace(x=x, y=y, z=z)  # noqa: E731
+    a = types.SimpleNamespace(boundingBox=types.SimpleNamespace(minPoint=P(0, 0, 0), maxPoint=P(1, 1, 1)))
+    b = types.SimpleNamespace(boundingBox=types.SimpleNamespace(minPoint=P(5, -2, 0), maxPoint=P(6, 0, 3)))
+    assert fc.boite_de([a, b]) == ((0, -2, 0), (6, 1, 3))
+    assert fc.boite_de([]) is None
+
+
+def test_quatre_faces_s_arrete_entre_les_quarts():
+    f = m.PAR_NOM["quatre_faces"].segments[0].cadre
+    assert f(0.2).az == pytest.approx(90) and f(0.24).az == pytest.approx(90)     # pause
+    assert f(0.5).az == pytest.approx(180) and f(1.0).az == pytest.approx(360)
