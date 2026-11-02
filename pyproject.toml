@@ -1,0 +1,8 @@
+[project]
+name = "fusion360-cinematic-camera"
+version = "0.2.0"
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+pythonpath = ["CinematicCamera", "."]
+testpaths = ["tests"]

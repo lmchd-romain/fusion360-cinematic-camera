@@ -1,0 +1,13 @@
+{
+	"autodeskProduct": "Fusion360",
+	"type": "addin",
+	"id": "c7f69024-4d9b-431d-b928-3e6b875fefbd",
+	"author": "lmchd-romain",
+	"description": {
+		"": "Sonde jetable : cadence de la caméra pilotée par événement personnalisé (CinematicCamera)."
+	},
+	"version": "0.1.0",
+	"runOnStartup": false,
+	"supportedOS": "windows",
+	"editEnabled": true
+}

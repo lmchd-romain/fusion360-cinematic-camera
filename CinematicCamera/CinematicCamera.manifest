@@ -1,0 +1,13 @@
+{
+	"autodeskProduct": "Fusion360",
+	"type": "addin",
+	"id": "dfbacbf7-0f42-4666-8630-55efbbafa729",
+	"author": "lmchd-romain",
+	"description": {
+		"": "Preuve de concept : la vue tourne lentement autour du modèle quand l'utilisateur est absent."
+	},
+	"version": "0.1.1",
+	"runOnStartup": false,
+	"supportedOS": "windows",
+	"editEnabled": true
+}

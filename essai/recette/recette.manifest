@@ -1,0 +1,12 @@
+{
+	"autodeskProduct": "Fusion360",
+	"type": "script",
+	"id": "3d43a943-2f0d-43a1-9ea0-ad44a3af2668",
+	"author": "lmchd-romain",
+	"description": {
+		"": "Recette automatique de CinematicCamera : rotation mesurée, arrêt, vue rendue, dans un document neuf ; écrit un rapport."
+	},
+	"version": "0.1.0",
+	"supportedOS": "windows",
+	"editEnabled": true
+}

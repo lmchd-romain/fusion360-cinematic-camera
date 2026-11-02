@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/
+
+# Journaux et réglages locaux
+*.log
+derniers_reglages.json
+
+# Éditeurs et systèmes
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Notes privées
+docs/local/
+__pycache__/
+.pytest_cache/
+.venv/
+*.log
+*.log.*
+reglages.json
+essai/resultats/*.json
+!essai/resultats/recette-*.json
+essai/resultats/*.marqueur
