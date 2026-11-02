@@ -1,26 +1,36 @@
 """Animation : un storyboard de l'espace Animation de Fusion, qui fait un tour complet du modèle.
 
-API Animation de Fusion : en preview depuis mai 2026 [supposé : comportement à prouver dans Fusion].
-Méthode : nouveau storyboard propre, enregistrement des vues allumé, puis pour chaque vue la tête de lecture
-posée à son instant et la caméra posée ; Fusion crée une action de vue entre deux vues enregistrées.
-Rien d'autre du design n'est touché.
+API Animation de Fusion : en preview depuis mai 2026.
+
+Essai 0.2.0 [vérifié, Romain, 2026-11-02] : tout fait d'un bloc dans le gestionnaire de la commande, la vue
+tourne en accéléré, Fusion affiche « View is not recording » et le storyboard reste vide. Les changements de
+caméra faits pendant une commande ne sont pas enregistrés [déduit].
+
+Méthode 0.2.1 [supposé] : hors de toute commande, un pas par tic de l'événement personnalisé, Fusion reprenant
+la main entre deux pas : enregistrement allumé et relu, puis pour chaque vue la tête de lecture posée, puis la
+caméra posée. Après deux vues, la fin du storyboard doit avoir avancé ; sinon on recommence en « lisse »
+(transition douce de Fusion, comme une orbite à la souris), sinon on abandonne avec un diagnostic.
 """
 from __future__ import annotations
 
 import time
 
-import adsk
-
 from . import noyau
 from .fusion_camera import PiloteCamera, boite_modele, design_actif
+
+# Une étape rendue par le générateur = un tic (≈ 1/30 s) rendu à Fusion avant la suivante.
+ATTENTE_DIRECTE = 2       # tics après une caméra posée sans transition
+ATTENTE_LISSE = 25        # tics après une caméra posée avec transition (≈ 0,8 s, la transition en dure 0,55)
+METHODES = ("directe", "lisse")
+VUES_TEMOINS = 2          # vues posées avant de vérifier que Fusion enregistre
 
 
 class ErreurAnimation(Exception):
     """Message en français, affiché tel quel."""
 
 
-def creer(app, reglages: noyau.Reglages, log) -> tuple[float, int]:
-    """Crée le storyboard. Rend (durée en s, nombre de vues). Lève ErreurAnimation."""
+def verifier(app):
+    """Contrôles avant de commencer. Rend le gestionnaire d'animation. Lève ErreurAnimation."""
     design = design_actif(app)
     if design is None:
         raise ErreurAnimation("Ouvrez d'abord un design avec un modèle.")
@@ -30,36 +40,93 @@ def creer(app, reglages: noyau.Reglages, log) -> tuple[float, int]:
                               "complément. Mettez Fusion à jour.")
     if boite_modele(app) is None:
         raise ErreurAnimation("Le design est vide : rien à filmer.")
-    t = time.perf_counter()
+    return gestion
+
+
+def _fin(storyboard) -> float:
+    try:
+        return float(storyboard.end)
+    except Exception:
+        return -1.0
+
+
+def _commandes_enregistrement(ui) -> list[str]:
+    """Pour le diagnostic : commandes de Fusion dont l'id parle d'enregistrement ou de vue d'animation."""
+    trouves = []
+    try:
+        defs = ui.commandDefinitions
+        for i in range(defs.count):
+            id_ = defs.item(i).id
+            bas = id_.lower()
+            if "record" in bas or ("view" in bas and "anim" in bas) or "storyboard" in bas:
+                trouves.append(id_)
+    except Exception:
+        pass
+    return trouves[:40]
+
+
+def etapes(app, reglages: noyau.Reglages, log, resultat: dict):
+    """Générateur : crée le storyboard pas à pas. Remplit `resultat` (duree, vues, methode) en cas de succès.
+
+    Lève ErreurAnimation (message pour l'utilisateur) si Fusion n'enregistre pas les vues.
+    """
+    t0 = time.perf_counter()
+    gestion = verifier(app)
     if not gestion.isAnimationWorkspaceActive:
         gestion.activateAnimationWorkspace()
-        adsk.doEvents()
+        yield
     storyboard = gestion.storyboards.add(True)
     if storyboard is None:
         raise ErreurAnimation("Fusion a refusé de créer un storyboard.")
+    yield
     storyboard.activate()
-    adsk.doEvents()
+    yield
+    log.info("animation : storyboard %d/%d créé, actif %s, enregistrement %s, tête %s, fin %s, mode %s",
+             gestion.storyboards.count, gestion.storyboards.count, storyboard.isActive,
+             storyboard.isViewRecordingOn, storyboard.playheadPosition, _fin(storyboard),
+             getattr(gestion, "recordingMode", "?"))
 
     pilote = PiloteCamera(app, log)
     trajet = pilote.preparer(reglages, 0.0)     # déjà cadré au premier instant : la vidéo boucle
     if trajet is None:
         raise ErreurAnimation("Aucune vue active.")
     vues = noyau.instants_animation(reglages.vitesse_deg_s, reglages.sens)
-    storyboard.isViewRecordingOn = True
-    try:
-        for instant, angle in vues:
-            storyboard.playheadPosition = instant
-            adsk.doEvents()
-            pilote._appliquer(trajet.pose(0.0, angle), etendue=trajet.etendue(0.0))
-            adsk.doEvents()
-    finally:
-        storyboard.isViewRecordingOn = False
-        try:
-            storyboard.playheadPosition = 0
-        except Exception:
-            pass
-    duree = vues[-1][0]
-    log.info("animation créée : %d vues, %.1f s, fin du storyboard %.1f s, calcul %.0f ms",
-             len(vues), duree, getattr(storyboard, "end", -1), (time.perf_counter() - t) * 1000)
-    return duree, len(vues)
 
+    for methode in METHODES:
+        storyboard.isViewRecordingOn = True
+        yield
+        allume = storyboard.isViewRecordingOn
+        log.info("animation, méthode %s : enregistrement demandé, relu %s", methode, allume)
+        attente = ATTENTE_LISSE if methode == "lisse" else ATTENTE_DIRECTE
+        enregistre = True
+        for k, (instant, angle) in enumerate(vues):
+            storyboard.playheadPosition = instant
+            yield
+            pose = trajet.pose(0.0, angle)
+            pilote._appliquer(pose, etendue=trajet.etendue(0.0))
+            if methode == "lisse":
+                cam = pilote.vue.camera
+                cam.isSmoothTransition = True
+                pilote.vue.camera = cam
+            for _ in range(attente):
+                yield
+            if k == VUES_TEMOINS:
+                fin = _fin(storyboard)
+                log.info("animation, méthode %s : après %d vues, tête %s, fin du storyboard %.2f s",
+                         methode, k + 1, storyboard.playheadPosition, fin)
+                if fin < vues[1][0] * 0.5:
+                    enregistre = False
+                    break
+        if enregistre:
+            storyboard.playheadPosition = 0
+            resultat.update(duree=vues[-1][0], vues=len(vues), methode=methode, fin=_fin(storyboard))
+            log.info("animation créée : méthode %s, %d vues, %.1f s, fin du storyboard %.1f s, %.1f s de calcul",
+                     methode, len(vues), vues[-1][0], _fin(storyboard), time.perf_counter() - t0)
+            return
+        storyboard.playheadPosition = 0
+        yield
+    log.error("animation : Fusion n'enregistre pas les vues posées par le complément. Commandes candidates : %s",
+              _commandes_enregistrement(app.userInterface))
+    raise ErreurAnimation("Fusion n'a enregistré aucune vue dans le storyboard : il refuse pour l'instant "
+                          "les vues posées par un complément.\nDétail dans journal.log (dossier de l'add-in) : "
+                          "envoyez-le pour la suite.")

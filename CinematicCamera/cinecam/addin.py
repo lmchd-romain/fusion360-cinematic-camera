@@ -85,13 +85,38 @@ def _appliquer(action: noyau.Action) -> None:
 def _relancer_le_fil() -> None:
     veilleur = _etat.get("veilleur")
     if veilleur is not None and "machine" in _etat:
-        veilleur.intervalle_s = _etat["machine"].intervalle_tic_s()
+        veilleur.intervalle_s = (1 / 30 if _etat.get("animation") is not None
+                                 else _etat["machine"].intervalle_tic_s())
+
+
+def _pas_animation() -> None:
+    """Un pas de la création d'animation, hors de toute commande : Fusion reprend la main entre deux pas."""
+    from . import animation
+    ui = _etat["ui"]
+    try:
+        next(_etat["animation"])
+        return
+    except StopIteration:
+        r = _etat.get("animation_resultat") or {}
+        ui.messageBox(f"Animation créée : un tour complet en {r.get('duree', 0):.0f} s ({r.get('vues', 0)} vues).\n"
+                      "Elle boucle sans à-coup. Lecture : bouton Lecture sous la timeline du storyboard.\n"
+                      "Vitesse : Réglages de la caméra cinématique.", "Caméra cinématique")
+    except animation.ErreurAnimation as e:
+        ui.messageBox(str(e), "Caméra cinématique")
+    except Exception:
+        journal().error("animation :\n%s", traceback.format_exc())
+        ui.messageBox("L'animation n'a pas pu être créée. Détail dans journal.log (dossier de "
+                      "l'add-in).", "Caméra cinématique")
+    _etat["animation"] = None
 
 
 class GestionTic(adsk.core.CustomEventHandler):
     def notify(self, args):
         veilleur = _etat.get("veilleur")
         try:
+            if _etat.get("animation") is not None:
+                _pas_animation()
+                return
             app, ui = _etat["app"], _etat["ui"]
             machine: noyau.Machine = _etat["machine"]
             action = machine.etape(_etat["lire_inactivite"](), time.monotonic(), _occupe(app, ui),
@@ -215,17 +240,24 @@ class GestionAnimation(adsk.core.CommandCreatedEventHandler):
 
 
 class GestionAnimationOK(adsk.core.CommandEventHandler):
+    """Ne fait que vérifier et lancer : la création se fait par les tics, hors de la commande, car Fusion
+    n'enregistre pas les vues posées pendant une commande [vérifié, essai 0.2.0]."""
+
     def notify(self, args):
         from . import animation
         ui = _etat["ui"]
         try:
+            if _etat.get("animation") is not None:
+                return
             machine: noyau.Machine = _etat["machine"]
             if machine.etat == noyau.ROTATION:
                 _appliquer(machine._arreter(time.monotonic()))
-            duree, n = animation.creer(_etat["app"], machine.reglages, journal())
-            ui.messageBox(f"Animation créée : un tour complet en {duree:.0f} s ({n} vues).\n"
-                          "Elle boucle sans à-coup. Lecture : bouton Lecture sous la timeline du storyboard.\n"
-                          "Vitesse : Réglages de la caméra cinématique.", "Caméra cinématique")
+            animation.verifier(_etat["app"])
+            _etat["animation_resultat"] = {}
+            _etat["animation"] = animation.etapes(_etat["app"], machine.reglages, journal(),
+                                                  _etat["animation_resultat"])
+            _relancer_le_fil()
+            journal().info("animation demandée")
         except animation.ErreurAnimation as e:
             ui.messageBox(str(e), "Caméra cinématique")
         except Exception:

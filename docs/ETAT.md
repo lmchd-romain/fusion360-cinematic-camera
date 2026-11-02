@@ -1,6 +1,6 @@
 # État — Caméra cinématique (CinematicCamera)
 
-Mis à jour le 2026-11-02 (0.2.0 : dépôt dédié, réglages, lancement au bouton, animation).
+Mis à jour le 2026-11-02 (0.2.1 : animation créée pas à pas, hors de la commande).
 
 ## Historique
 
@@ -9,6 +9,12 @@ Mis à jour le 2026-11-02 (0.2.0 : dépôt dédié, réglages, lancement au bout
   `isFitView`, `viewport.refresh()` à chaque pas, vitesse qui monte en douceur). **Romain : « ça fonctionne
   nickel » [vérifié, 2026-11-02, rotation en absence].**
 - 0.2.0 : dépôt `fusion360-cinematic-camera`, nouveaux identifiants (GUID, commandes `lmchdCinematicCamera_*`).
+- 0.2.0, essai de Romain [vérifié] : « Créer l'animation » → timeline vide, « View is not recording » en rouge
+  à l'écran, la vue fait le tour en accéléré en 1 s. Tout se faisait d'un bloc dans la commande.
+- 0.2.1 : création pas à pas par l'événement de tic, hors de la commande, Fusion reprenant la main entre
+  chaque geste (enregistrement allumé et relu, tête de lecture, caméra). Contrôle après 3 vues : si la fin
+  du storyboard n'avance pas, deuxième méthode avec transition douce de Fusion (≈ 1 min) ; sinon abandon
+  avec message et diagnostic dans `journal.log` (états relus, commandes d'enregistrement de Fusion).
 
 ## 0.2.0 — nouveautés à vérifier dans Fusion [supposé]
 
