@@ -29,6 +29,12 @@ Add-in Fusion : la vue tourne lentement autour du modèle, en douceur, comme une
   | Grand angle supercar | objectif très large, tout près, au ras du sol | 8 s |
   | Téléobjectif | objectif très serré, de loin : perspective aplatie | 12 s |
   | Coups de zoom | trois zooms secs de l'objectif, avec pauses | 6 s |
+  | Orbite éclair (rampe de vitesse) | lent, tour fouetté à fond avec objectif grand ouvert, lent | 6 s |
+  | Transitions warp (perspective étirée) | fonce en ouvrant l'objectif à l'extrême, coupe au sommet, repart d'ailleurs ; deux fois | 8 s |
+  | Pulsation rythmée | rotation lente, huit coups d'objectif réguliers (4 s = 120 BPM) | 8 s |
+  | Vertigo en orbite | dolly zoom pendant un quart de tour | 8 s |
+  | Chute grand angle | du dessus, objectif extrême qui se referme en descendant | 8 s |
+  | Montage dynamique (objectifs) | six plans coupés : grand angle au sol, téléobjectif, zoom éclair, tour fouetté, vertigo, plan final | 14 s |
 
   **Angle de vue (°)** : objectif de la caméra pour tous les mouvements (0 = celui de la vue actuelle ;
   15 téléobjectif, 45 normal, 90 grand angle). Les mouvements à effet d'objectif gardent le leur. Après la

@@ -65,6 +65,27 @@ def mi_doux(u: float) -> float:
     return 0.5 * min(1.0, max(0.0, u)) + 0.5 * doux(u)
 
 
+def rampe(u: float, k: float = 6.0) -> float:
+    """Rampe de vitesse : lent, coup d'accélérateur au milieu, lent (sigmoïde normalisée)."""
+    u = min(1.0, max(0.0, u))
+    return 0.5 + 0.5 * math.tanh(k * (u - 0.5)) / math.tanh(k / 2)
+
+
+def entree(u: float) -> float:
+    """Part lentement et finit à fond (avant une coupe)."""
+    return min(1.0, max(0.0, u)) ** 3
+
+
+def sortie(u: float) -> float:
+    """Part à fond et se pose (après une coupe)."""
+    return 1.0 - (1.0 - min(1.0, max(0.0, u))) ** 3
+
+
+def bosse(u: float) -> float:
+    """0 au début et à la fin, 1 au milieu : l'objectif s'ouvre au plus vite du mouvement."""
+    return math.sin(math.pi * min(1.0, max(0.0, u))) ** 2
+
+
 def _mix(a: float, b: float, s: float) -> float:
     return a + (b - a) * s
 
@@ -114,6 +135,48 @@ def _coups_de_zoom(u):
     v = u * 3 - k
     fovs = (60.0, 38.0, 24.0, 15.0)
     return Cadre(10.0 + 20.0 * u, 20.0, 1.0, fov=_mix(fovs[k], fovs[k + 1], doux(min(1.0, v / 0.15))))
+
+
+def _orbite_eclair(u):
+    return Cadre(-40.0 + 360.0 * rampe(u), 20.0, 1.0, fov=40.0 + 55.0 * bosse(u))
+
+
+def _pulsation(u):
+    """Rotation lente ; à chaque temps (8 dans l'animation), l'objectif se resserre d'un coup puis se relâche."""
+    temps = 8
+    k = min(temps - 1, int(u * temps))
+    v = u * temps - k
+    coup = doux(v / 0.12) if v < 0.12 else 1.0 - doux((v - 0.12) / 0.88)
+    return Cadre(60.0 * u, 22.0, 1.0, fov=46.0 - 16.0 * coup)
+
+
+def _vertigo_orbital(u):
+    s = doux(u)
+    return Cadre(90.0 * s, 18.0, 1.0, fov=75.0 - 60.0 * s)
+
+
+def _chute(u):
+    s = doux(u)
+    return Cadre(90.0 * s, 84.0 - 46.0 * s, 1.0, fov=112.0 - 67.0 * s)
+
+
+def _plan(az0, az1, el0, el1, d0, d1, f0, f1, courbe_pos=doux, courbe_fov=None, decal=(0.0, 0.0, 0.0)):
+    """Plan de montage : position et objectif sur deux courbes différentes."""
+    courbe_fov = courbe_fov or courbe_pos
+
+    def f(u):
+        s, sf = courbe_pos(u), courbe_fov(u)
+        return Cadre(_mix(az0, az1, s), _mix(el0, el1, s), _mix(d0, d1, s), decal, _mix(f0, f1, sf))
+    return f
+
+
+def _crash(u):
+    """Zoom éclair de l'objectif dans le premier quart, puis plan fixe qui glisse à peine."""
+    return Cadre(20.0 + 6.0 * u, 25.0, 1.0, (0.2, 0.0, 0.1), _mix(62.0, 16.0, sortie(min(1.0, u / 0.25))))
+
+
+def _whip(u):
+    return Cadre(120.0 + 140.0 * rampe(u, 7.0), 15.0, 1.0, fov=50.0 + 35.0 * bosse(u))
 
 
 def _tornade(u):
@@ -190,6 +253,42 @@ CATALOGUE: tuple[Mouvement, ...] = (
     Mouvement("tornade", "Descente en tornade",
               "Part du zénith et descend en spirale d'un tour et demi jusqu'à une vue de trois-quarts.",
               14.0, (Segment(1, _tornade),)),
+    Mouvement("eclair", "Orbite éclair (rampe de vitesse)",
+              "Lent, puis un tour fouetté à toute vitesse, puis lent : l'objectif s'ouvre en grand au plus vite, "
+              "la perspective s'étire comme une accélération.",
+              6.0, (Segment(1, _orbite_eclair),)),
+    Mouvement("warp", "Transitions warp (perspective étirée)",
+              "La caméra fonce sur le modèle en ouvrant l'objectif à l'extrême ; coupe au sommet de l'étirement, "
+              "le plan suivant repart d'un autre côté en se resserrant. Deux fois, puis plan final.",
+              8.0, (
+                  Segment(1.0, _plan(0, 18, 20, 16, 1.0, 0.8, 40, 115, entree, entree)),
+                  Segment(1.0, _plan(150, 168, 30, 26, 0.8, 1.0, 115, 42, sortie, sortie), coupe=True),
+                  Segment(1.0, _plan(168, 186, 26, 22, 1.0, 0.8, 42, 115, entree, entree)),
+                  Segment(1.4, _plan(290, 320, 14, 24, 0.8, 1.0, 115, 38, sortie, sortie), coupe=True),
+              )),
+    Mouvement("pulsation", "Pulsation rythmée",
+              "Rotation lente ; huit coups d'objectif réguliers, comme sur le rythme d'une musique. Durée = "
+              "8 temps (8 s : un temps par seconde ; 4 s : 120 battements par minute).",
+              8.0, (Segment(1, _pulsation),)),
+    Mouvement("vertigo_orbital", "Vertigo en orbite",
+              "Dolly zoom pendant un quart de tour : la perspective s'aplatit en tournant, le modèle garde sa "
+              "taille.",
+              8.0, (Segment(1, _vertigo_orbital),)),
+    Mouvement("chute", "Chute grand angle",
+              "Part du dessus avec un objectif extrême, descend en tournant pendant que l'objectif se referme : "
+              "la perspective se détend.",
+              8.0, (Segment(1, _chute),)),
+    Mouvement("montage_fov", "Montage dynamique (objectifs)",
+              "Montage nerveux, six plans coupés franc : grand angle au ras du sol, téléobjectif qui glisse, "
+              "zoom éclair, tour fouetté, vertigo, plan final qui se pose.",
+              14.0, (
+                  Segment(0.9, _plan(-30, -18, 4, 5, 0.95, 0.78, 100, 100, mi_doux)),
+                  Segment(0.9, _plan(70, 96, 12, 12, 1.0, 1.0, 14, 14, mi_doux), coupe=True),
+                  Segment(0.7, _crash, coupe=True),
+                  Segment(0.8, _whip, coupe=True),
+                  Segment(0.8, _plan(200, 206, 10, 10, 1.0, 1.0, 20, 80, mi_doux), coupe=True),
+                  Segment(1.4, _plan(-60, 10, 12, 28, 0.85, 1.0, 92, 40, doux, sortie), coupe=True),
+              )),
 )
 
 PAR_NOM = {m.nom: m for m in CATALOGUE}

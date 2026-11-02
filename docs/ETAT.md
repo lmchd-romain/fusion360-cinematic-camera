@@ -1,6 +1,6 @@
 # État — Caméra cinématique (CinematicCamera)
 
-Mis à jour le 2026-11-02 (0.5.0 : effets d'angle de vue, FOV).
+Mis à jour le 2026-11-02 (0.6.0 : mouvements dynamiques à objectif variable).
 
 ## Historique
 
@@ -53,6 +53,18 @@ si non).
 | Y2 | Grand angle supercar ; Téléobjectif | perspective exagérée ; perspective aplatie |
 | Y3 | Platine avec Angle de vue 90 puis 15 | grand angle, puis téléobjectif |
 | Y4 | Après création, retour dans Conception | angle de vue d'avant |
+
+## 0.6.0 — mouvements dynamiques [supposé]
+
+Orbite éclair, transitions warp, pulsation rythmée, vertigo en orbite, chute grand angle, montage dynamique.
+Objectif jusqu'à 115° ; la caméra reste hors de la sphère qui englobe le modèle (test). Jusqu'à ~170 vues
+(montage) : création ≈ 20 s.
+
+| Code | Geste | Attendu |
+|---|---|---|
+| Z1 | Orbite éclair, Transitions warp | sensation d'accélération ; coupe nette au sommet de l'étirement |
+| Z2 | Pulsation rythmée à 4 s | huit coups d'objectif réguliers |
+| Z3 | Montage dynamique | six plans, coupes franches, aucun plan à l'intérieur du modèle |
 
 ## Mouvement des pièces (éclaté, ordre de montage, portes, tiroirs, couvercle)
 

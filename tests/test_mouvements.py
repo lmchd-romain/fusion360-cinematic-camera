@@ -120,3 +120,28 @@ def test_angle_de_vue_du_dialogue_et_vue_orthographique():
 def test_coups_de_zoom_resserrent_l_objectif():
     f = m.PAR_NOM["coups_zoom"].segments[0].cadre
     assert f(0).fov == 60 and f(0.2).fov == pytest.approx(38) and f(1).fov == pytest.approx(15)
+
+
+# Repère réaliste : distance qui cadre la sphère du modèle avec un objectif de 40°.
+REP_R = m.Repere((0, 0, 0), 50.0, 50.0 / math.sin(math.radians(20)), (0, 0, 1), (1, 0, 0), (0, 1, 0), angle=40.0)
+
+
+@pytest.mark.parametrize("mv", m.CATALOGUE, ids=lambda mv: mv.nom)
+def test_la_camera_reste_hors_du_modele(mv):
+    # Sphère englobante du modèle, marge de 15 % comprise : rayon du repère / 1,15.
+    for c in m.cles(mv, mv.duree_defaut_s, REP_R):
+        assert n.norme(n.soustrait(c.pose.oeil, REP_R.centre)) > REP_R.rayon / 1.15, (mv.nom, c.t)
+
+
+def test_rampe_de_vitesse_et_bosse():
+    assert m.rampe(0) == pytest.approx(0) and m.rampe(1) == pytest.approx(1) and m.rampe(0.5) == pytest.approx(0.5)
+    assert (m.rampe(0.55) - m.rampe(0.45)) > 5 * (m.rampe(0.1) - m.rampe(0.0))   # fouetté au milieu
+    assert m.bosse(0) == 0 and m.bosse(0.5) == pytest.approx(1)
+
+
+def test_warp_coupe_au_sommet_de_l_etirement():
+    cles = m.cles(m.PAR_NOM["warp"], 8, REP_R)
+    coupes = [(a, b) for a, b in zip(cles, cles[1:])
+              if n.norme(n.soustrait(b.pose.oeil, a.pose.oeil)) > 0.2 * REP_R.distance]
+    assert len(coupes) == 2
+    assert all(a.fov == pytest.approx(115) and b.fov == pytest.approx(115) for a, b in coupes)

@@ -27,3 +27,5 @@ Décisions produit (**décidé** = Romain ; **mon choix** = l'agent, contestable
 - 2026-11-02 (mon choix, à essayer) : effets d'angle de vue : Vertigo (dolly zoom), Grand angle supercar,
   Téléobjectif, Coups de zoom, et champ « Angle de vue » dans le dialogue d'animation. La vue reprend son
   angle d'avant après la création.
+- 2026-11-02 (mon choix, à essayer) : six mouvements dynamiques à objectif variable : orbite éclair, transitions
+  warp, pulsation rythmée, vertigo en orbite, chute grand angle, montage dynamique.
