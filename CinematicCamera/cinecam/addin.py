@@ -9,7 +9,7 @@ from pathlib import Path
 
 import adsk.core
 
-from . import noyau, reglages_fichier
+from . import mouvements, noyau, reglages_fichier
 from .fusion_camera import PiloteCamera
 from .inactivite import creer_lecteur, creer_lecteur_appuis
 from .journal import journal, fermer
@@ -98,9 +98,9 @@ def _pas_animation() -> None:
         return
     except StopIteration:
         r = _etat.get("animation_resultat") or {}
-        ui.messageBox(f"Animation créée : un tour complet en {r.get('duree', 0):.0f} s ({r.get('vues', 0)} vues).\n"
-                      "Elle boucle sans à-coup. Lecture : bouton Lecture sous la timeline du storyboard.\n"
-                      "Vitesse : Réglages de la caméra cinématique.", "Caméra cinématique")
+        fin = "Elle boucle sans à-coup. " if r.get("boucle") else ""
+        ui.messageBox(f"Animation créée : {r.get('mouvement', '')}, {r.get('duree', 0):.0f} s ({r.get('vues', 0)} vues).\n"
+                      f"{fin}Lecture : bouton Lecture sous la timeline du storyboard.", "Caméra cinématique")
     except animation.ErreurAnimation as e:
         ui.messageBox(str(e), "Caméra cinématique")
     except Exception:
@@ -152,14 +152,7 @@ class GestionLancer(adsk.core.CommandCreatedEventHandler):
 
 
 # ---------------------------------------------------------------- dialogue de réglages
-IN_AUTO, IN_DELAI, IN_TOUR, IN_RESUME = "auto", "delai", "tour", "resume"
-
-
-def _resume(auto: bool, delai: int, tour: int) -> str:
-    vitesse = noyau.vitesse_pour_tour(tour)
-    depart = (f"Démarre seule après {delai} s sans souris ni clavier." if auto
-              else "Ne démarre qu'au bouton « Caméra cinématique ».")
-    return f"{depart}<br>Un tour en {tour} s ({vitesse:.1f} °/s)."
+IN_AUTO, IN_DELAI, IN_TOUR = "auto", "delai", "tour"
 
 
 class GestionReglages(adsk.core.CommandCreatedEventHandler):
@@ -176,10 +169,10 @@ class GestionReglages(adsk.core.CommandCreatedEventHandler):
                                                          int(round(r.delai_s)))
             delai.tooltip = "Secondes sans souris ni clavier avant que la vue se mette à tourner."
             delai.isEnabled = r.actif
-            tour = inputs.addIntegerSliderCommandInput(IN_TOUR, "Durée d'un tour (s)", 10, 600, False)
-            tour.valueOne = int(round(min(600, max(10, noyau.duree_tour_s(r.vitesse_deg_s)))))
+            tour = inputs.addIntegerSpinnerCommandInput(
+                IN_TOUR, "Durée d'un tour (s)", 10, 600, 5,
+                int(round(min(600, max(10, noyau.duree_tour_s(r.vitesse_deg_s))))))
             tour.tooltip = "Vitesse de rotation : 150 s = lent et calme, 30 s = rapide."
-            inputs.addTextBoxCommandInput(IN_RESUME, "", _resume(r.actif, delai.value, tour.valueOne), 2, True)
             for h, ev in ((GestionReglagesChange(), cmd.inputChanged), (GestionReglagesOK(), cmd.execute),
                           (GestionReglagesFin(), cmd.destroy)):
                 ev.add(h)
@@ -191,7 +184,7 @@ class GestionReglages(adsk.core.CommandCreatedEventHandler):
 def _lire(inputs) -> tuple[bool, int, int]:
     auto = adsk.core.BoolValueCommandInput.cast(inputs.itemById(IN_AUTO)).value
     delai = adsk.core.IntegerSpinnerCommandInput.cast(inputs.itemById(IN_DELAI)).value
-    tour = adsk.core.IntegerSliderCommandInput.cast(inputs.itemById(IN_TOUR)).valueOne
+    tour = adsk.core.IntegerSpinnerCommandInput.cast(inputs.itemById(IN_TOUR)).value
     return auto, delai, tour
 
 
@@ -199,9 +192,7 @@ class GestionReglagesChange(adsk.core.InputChangedEventHandler):
     def notify(self, args):
         try:
             inputs = adsk.core.InputChangedEventArgs.cast(args).inputs
-            auto, delai, tour = _lire(inputs)
-            inputs.itemById(IN_DELAI).isEnabled = auto
-            inputs.itemById(IN_RESUME).formattedText = _resume(auto, delai, tour)
+            inputs.itemById(IN_DELAI).isEnabled = _lire(inputs)[0]
         except Exception:
             journal().error("réglages, changement :\n%s", traceback.format_exc())
 
@@ -231,12 +222,57 @@ class GestionReglagesFin(adsk.core.CommandEventHandler):
 
 
 # ---------------------------------------------------------------- animation
+IN_MOUVEMENT, IN_DUREE, IN_ZOOM = "mouvement", "duree", "zoom"
+
+
 class GestionAnimation(adsk.core.CommandCreatedEventHandler):
+    """Dialogue avant la création : mouvement, durée (la vitesse), zoom."""
+
     def notify(self, args):
-        cmd = adsk.core.CommandCreatedEventArgs.cast(args).command
-        h = GestionAnimationOK()
-        cmd.execute.add(h)
-        _dialogue.append(h)
+        try:
+            cmd = adsk.core.CommandCreatedEventArgs.cast(args).command
+            cmd.isRepeatable = False
+            cmd.okButtonText = "Créer"
+            r = _etat["machine"].reglages
+            inputs = cmd.commandInputs
+            liste = inputs.addDropDownCommandInput(IN_MOUVEMENT, "Mouvement",
+                                                   adsk.core.DropDownStyles.TextListDropDownStyle)
+            choisi = mouvements.PAR_NOM.get(r.anim_mouvement, mouvements.CATALOGUE[0])
+            for m in mouvements.CATALOGUE:
+                liste.listItems.add(m.libelle, m is choisi)
+            liste.tooltip = "Type de mouvement de caméra."
+            liste.tooltipDescription = choisi.info
+            duree = inputs.addIntegerSpinnerCommandInput(IN_DUREE, "Durée (s)", 3, 600, 1,
+                                                         int(round(r.anim_duree_s)))
+            duree.tooltip = "Durée du mouvement : plus long = caméra plus lente."
+            zoom = inputs.addIntegerSpinnerCommandInput(IN_ZOOM, "Zoom (%)", 50, 300, 10,
+                                                        int(round(r.anim_zoom_pct)))
+            zoom.tooltip = "100 % = modèle entier à l'image ; 200 % = deux fois plus près ; 50 % = plus loin."
+            for h, ev in ((GestionAnimationChange(), cmd.inputChanged), (GestionAnimationOK(), cmd.execute),
+                          (GestionReglagesFin(), cmd.destroy)):
+                ev.add(h)
+                _dialogue.append(h)
+        except Exception:
+            journal().error("animation, dialogue :\n%s", traceback.format_exc())
+
+
+def _mouvement_choisi(inputs) -> mouvements.Mouvement:
+    liste = adsk.core.DropDownCommandInput.cast(inputs.itemById(IN_MOUVEMENT))
+    nom = liste.selectedItem.name if liste.selectedItem else ""
+    return next((m for m in mouvements.CATALOGUE if m.libelle == nom), mouvements.CATALOGUE[0])
+
+
+class GestionAnimationChange(adsk.core.InputChangedEventHandler):
+    def notify(self, args):
+        try:
+            a = adsk.core.InputChangedEventArgs.cast(args)
+            if a.input.id != IN_MOUVEMENT:
+                return
+            m = _mouvement_choisi(a.inputs)
+            a.input.tooltipDescription = m.info
+            adsk.core.IntegerSpinnerCommandInput.cast(a.inputs.itemById(IN_DUREE)).value = int(m.duree_defaut_s)
+        except Exception:
+            journal().error("animation, changement :\n%s", traceback.format_exc())
 
 
 class GestionAnimationOK(adsk.core.CommandEventHandler):
@@ -249,23 +285,27 @@ class GestionAnimationOK(adsk.core.CommandEventHandler):
         try:
             if _etat.get("animation") is not None:
                 return
+            inputs = adsk.core.CommandEventArgs.cast(args).command.commandInputs
             machine: noyau.Machine = _etat["machine"]
+            r = machine.reglages
+            r.anim_mouvement = _mouvement_choisi(inputs).nom
+            r.anim_duree_s = float(adsk.core.IntegerSpinnerCommandInput.cast(inputs.itemById(IN_DUREE)).value)
+            r.anim_zoom_pct = float(adsk.core.IntegerSpinnerCommandInput.cast(inputs.itemById(IN_ZOOM)).value)
+            reglages_fichier.ecrire(FICHIER_REGLAGES, r)
             if machine.etat == noyau.ROTATION:
                 _appliquer(machine._arreter(time.monotonic()))
             animation.verifier(_etat["app"])
             _etat["animation_resultat"] = {}
-            _etat["animation"] = animation.etapes(_etat["app"], machine.reglages, journal(),
-                                                  _etat["animation_resultat"])
+            _etat["animation"] = animation.etapes(_etat["app"], r, journal(), _etat["animation_resultat"])
             _relancer_le_fil()
-            journal().info("animation demandée")
+            journal().info("animation demandée : %s, %.0f s, zoom %.0f %%", r.anim_mouvement, r.anim_duree_s,
+                           r.anim_zoom_pct)
         except animation.ErreurAnimation as e:
             ui.messageBox(str(e), "Caméra cinématique")
         except Exception:
             journal().error("animation :\n%s", traceback.format_exc())
             ui.messageBox("L'animation n'a pas pu être créée. Détail dans journal.log (dossier de "
                           "l'add-in).", "Caméra cinématique")
-        finally:
-            _dialogue.clear()
 
 
 # ---------------------------------------------------------------- interface
@@ -286,6 +326,24 @@ def _espace_animation(ui):
     except Exception:
         journal().error("espace Animation :\n%s", traceback.format_exc())
     return None
+
+
+def _onglet_animation(espace):
+    """L'onglet ANIMATION de l'espace (pas OUTILS) ; None si l'espace n'a pas d'onglets lisibles.
+
+    0.2.0 : un panneau ajouté à l'espace sans onglet tombait dans OUTILS [vérifié, Romain].
+    """
+    try:
+        onglets = espace.toolbarTabs
+        tous = [onglets.item(i) for i in range(onglets.count)]
+    except Exception:
+        return None
+    journal().info("onglets de l'espace Animation : %s", [(o.id, o.name) for o in tous])
+    for o in tous:
+        if "anim" in (o.id or "").lower() or "anim" in (o.name or "").lower():
+            return o
+    autres = [o for o in tous if not any(m in f"{o.id} {o.name}".lower() for m in ("tool", "outil", "util"))]
+    return autres[0] if autres else None
 
 
 def _definition(ui, id_, nom, info, icone, gestion):
@@ -343,9 +401,9 @@ def run(context):
     reglages_def = _definition(ui, ID_REGLAGES, "Réglages de la caméra cinématique",
                                "Vitesse de rotation, temps avant activation, rotation quand vous vous absentez.",
                                "icone_reglages", GestionReglages())
-    animation_def = _definition(ui, ID_ANIMATION, "Créer l'animation de rotation",
-                                "Crée un storyboard : un tour complet du modèle, cadré, à la vitesse des "
-                                "réglages. Il boucle sans à-coup.", "icone_animation", GestionAnimation())
+    animation_def = _definition(ui, ID_ANIMATION, "Créer une animation caméra",
+                                "Crée un storyboard : choix du mouvement (platine, drone, edit supercar…), "
+                                "de sa durée et du zoom.", "icone_animation", GestionAnimation())
     _etat["def_lancer"] = lancer
     for p in PANNEAUX:
         panneau = ui.allToolbarPanels.itemById(p)
@@ -356,7 +414,10 @@ def run(context):
             break
     espace = _espace_animation(ui)
     if espace is not None:
-        panneau = espace.toolbarPanels.add(ID_PANNEAU_ANIMATION, "CAMÉRA CINÉMATIQUE")
+        onglet = _onglet_animation(espace)
+        hote = onglet if onglet is not None else espace
+        panneau = hote.toolbarPanels.add(ID_PANNEAU_ANIMATION, "CAMÉRA CINÉMATIQUE")
+        _etat["onglet_animation"] = getattr(onglet, "id", None)
         panneau.controls.addCommand(animation_def).isPromoted = True
         panneau.controls.addCommand(reglages_def)
         _etat["espace_animation"] = espace.id
@@ -372,9 +433,9 @@ def run(context):
     veilleur = Veilleur(app)
     _etat["veilleur"] = veilleur
     veilleur.start()
-    log.info("démarré : version %s, réglages %s, panneau %s, espace Animation %s", app.version,
+    log.info("démarré : version %s, réglages %s, panneau %s, espace Animation %s, onglet %s", app.version,
              json.dumps(reglages.vers_dict(), ensure_ascii=False), _etat.get("panneau"),
-             _etat.get("espace_animation"))
+             _etat.get("espace_animation"), _etat.get("onglet_animation"))
 
 
 def stop(context):

@@ -51,7 +51,7 @@ def module(monkeypatch):
         del sys.modules[n]
 
 
-def jouer(animation, noyau, monkeypatch, enregistre_si):
+def jouer(animation, noyau, monkeypatch, enregistre_si, **reglages):
     sb = FauxStoryboard(enregistre_si)
     gestion = types.SimpleNamespace(isAnimationWorkspaceActive=True, recordingMode=0,
                                     storyboards=types.SimpleNamespace(add=lambda propre: sb, count=1))
@@ -61,6 +61,7 @@ def jouer(animation, noyau, monkeypatch, enregistre_si):
     class Pilote:
         def __init__(self, app, log):
             self.vue = vue
+            self.rayon = 50.0
 
         def preparer(self, reglages, duree):
             return noyau.Trajet((0, 0, 1), (100, 0, 0), (0, 0, 0), (0, 0, 0), 100, 35, 0)
@@ -73,7 +74,7 @@ def jouer(animation, noyau, monkeypatch, enregistre_si):
     resultat = {}
     log = types.SimpleNamespace(info=lambda *a: None, error=lambda *a: None)
     pas = 0
-    for _ in animation.etapes(app, noyau.Reglages(), log, resultat):
+    for _ in animation.etapes(app, noyau.Reglages(**({"anim_duree_s": 150.0} | reglages)), log, resultat):
         pas += 1
     return sb, resultat, pas
 
@@ -81,7 +82,7 @@ def jouer(animation, noyau, monkeypatch, enregistre_si):
 def test_enregistre_en_direct(module, monkeypatch):
     animation, noyau = module
     sb, r, _ = jouer(animation, noyau, monkeypatch, "toujours")
-    assert r["methode"] == "directe" and r["vues"] == 73
+    assert r["methode"] == "directe" and r["vues"] > 72 and r["boucle"]
     assert sb.end == pytest.approx(150) and sb.playheadPosition == 0
 
 
@@ -95,3 +96,12 @@ def test_abandon_clair_si_fusion_n_enregistre_rien(module, monkeypatch):
     animation, noyau = module
     with pytest.raises(animation.ErreurAnimation, match="aucune vue"):
         jouer(animation, noyau, monkeypatch, "jamais")
+
+
+def test_chaque_mouvement_se_cree(module, monkeypatch):
+    animation, noyau = module
+    from cinecam import mouvements
+    for m in mouvements.CATALOGUE:
+        sb, r, _ = jouer(animation, noyau, monkeypatch, "toujours", anim_mouvement=m.nom, anim_duree_s=12.0,
+                         anim_zoom_pct=150.0)
+        assert r["mouvement"] == m.libelle and sb.end >= 12.0

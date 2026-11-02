@@ -35,6 +35,7 @@ def test_run_puis_stop(addin):
     assert a.ID_LANCER in panneau and a.ID_REGLAGES in panneau and panneau[a.ID_LANCER].isPromoted
     anim = ui.allToolbarPanels.d[a.ID_PANNEAU_ANIMATION].controls.d
     assert a.ID_ANIMATION in anim and a.ID_REGLAGES in anim
+    assert ui.allToolbarPanels.d[a.ID_PANNEAU_ANIMATION].hote == "AnimationTab"   # pas dans OUTILS
     for id_, dossier in ((a.ID_LANCER, "icone"), (a.ID_REGLAGES, "icone_reglages"),
                          (a.ID_ANIMATION, "icone_animation")):
         icones = Path(ui.commandDefinitions.d[id_].ressources)
@@ -59,12 +60,6 @@ def test_run_puis_stop(addin):
     assert a.ID_PANNEAU_ANIMATION not in ui.allToolbarPanels.d
     assert a.ID_EVENEMENT not in app.evenements
     assert not any(t.name == "CinematicCameraVeilleur" for t in __import__("threading").enumerate())
-
-
-def test_resume_des_reglages(addin):
-    _, a, _ = addin
-    assert "après 60 s" in a._resume(True, 60, 150) and "2.4 °/s" in a._resume(True, 60, 150)
-    assert "bouton" in a._resume(False, 60, 30)
 
 
 def test_run_nettoie_un_arret_incomplet(addin):

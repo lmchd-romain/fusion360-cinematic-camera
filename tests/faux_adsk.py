@@ -55,18 +55,34 @@ class _Panneau:
 
 
 class _PanneauxEspace:
-    def __init__(self, tous):
-        self.tous = tous
+    def __init__(self, tous, hote):
+        self.tous, self.hote = tous, hote
 
     def add(self, id_, nom, *a):
         self.tous[id_] = _Panneau(self.tous, id_)
+        self.tous[id_].hote = self.hote
         return self.tous[id_]
+
+
+class _Onglet:
+    def __init__(self, id_, nom, tous):
+        self.id, self.name = id_, nom
+        self.toolbarPanels = _PanneauxEspace(tous, id_)
+
+
+class _Onglets:
+    def __init__(self, l):
+        self.l, self.count = l, len(l)
+
+    def item(self, i):
+        return self.l[i]
 
 
 class _Espace:
     def __init__(self, id_, nom, tous):
         self.id, self.name = id_, nom
-        self.toolbarPanels = _PanneauxEspace(tous)
+        self.toolbarPanels = _PanneauxEspace(tous, id_)
+        self.toolbarTabs = _Onglets([_Onglet("ToolsTab", "OUTILS", tous), _Onglet("AnimationTab", "ANIMATION", tous)])
 
 
 class _Espaces:

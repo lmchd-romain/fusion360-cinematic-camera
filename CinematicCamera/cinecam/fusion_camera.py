@@ -149,8 +149,10 @@ class PiloteCamera:
         if ortho:
             etendue0 = etendue1 = avant.viewExtents
         boite = boite_modele(self.app) if reglages.cadrer else None
+        self.rayon = distance0 / 3
         if boite:
             cible1, rayon = noyau.cadrage(*boite)
+            self.rayon = rayon
             if ortho:
                 cote = _cote_visible_ortho(vue)
                 if cote:

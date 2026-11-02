@@ -15,3 +15,8 @@ Décisions produit (**décidé** = Romain ; **mon choix** = l'agent, contestable
   touche, une commande ou un second clic sur le bouton l'arrête.
 - 2026-11-02 (mon choix) : l'animation fait un tour complet, cadrée dès la première image, à vitesse
   constante, pour une vidéo qui boucle. Un nouveau storyboard à chaque clic, les autres ne sont pas touchés.
+- 2026-11-02 (décidé) : dialogue avant la création d'une animation (vitesse, zoom) ; panneau dans l'onglet
+  ANIMATION ; dialogue Réglages sans texte ni curseur, champs en secondes.
+- 2026-11-02 (mon choix, à essayer) : huit mouvements : platine, spirale, drone, révélation supercar, edit
+  supercar (montage coupé), balancier, travelling latéral, vue de dessus. Vitesse = durée du mouvement ; zoom
+  50–300 %. Les mouvements ne servent qu'aux animations ; la rotation au bouton et en absence reste la platine.

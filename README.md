@@ -7,8 +7,22 @@ Add-in Fusion : la vue tourne lentement autour du modèle, en douceur, comme une
 - **Rotation quand je m'absente** : après un temps sans souris ni clavier, la vue se met à tourner seule ;
   la moindre saisie l'arrête.
 - **Réglages** : durée d'un tour (vitesse), temps avant activation, rotation quand je m'absente.
-- **Espace Animation → « Créer l'animation de rotation »** : crée un storyboard d'un tour complet du
-  modèle, cadré, à la vitesse des réglages ; la fin rejoint le début, la vidéo boucle sans à-coup.
+- **Onglet ANIMATION → « Créer une animation caméra »** : un dialogue (mouvement, durée, zoom) puis un
+  storyboard créé tout seul. Mouvements :
+
+  | Mouvement | Effet | Durée par défaut |
+  |---|---|---|
+  | Platine (tour complet) | tour à vitesse constante, trois-quarts ; boucle | 60 s |
+  | Orbite en spirale | un tour en montant puis en redescendant ; boucle | 40 s |
+  | Vue drone | arrive de haut et de loin, plonge en tournant | 12 s |
+  | Révélation supercar | part au ras du sol, tout près, recule en dévoilant | 10 s |
+  | Edit supercar (montage) | six plans courts coupés franc, puis plan large final | 15 s |
+  | Balancier | va-et-vient de ±40°, comme un présentoir ; boucle | 20 s |
+  | Travelling latéral | glisse en ligne droite le long du modèle | 10 s |
+  | Vue de dessus tournante | presque à la verticale, demi-tour | 20 s |
+
+  Durée : plus long = caméra plus lente. Zoom : 100 % = modèle entier, 200 % = deux fois plus près. Le
+  mouvement part du côté où la vue est tournée au moment du clic.
 
 *EN — Fusion add-in: smooth, slow orbit of the model. On demand (button), automatically when the user is
 away, or recorded as an Animation storyboard (one seamless loop).*
@@ -25,7 +39,7 @@ réglages, lancement au bouton et animation **pas encore essayés**. Voir `docs/
    `CinematicCamera` (dans le clone de `fusion360-cinematic-camera`) → **Exécuter**, cocher **Exécuter au
    démarrage**.
 3. Boutons : **Utilitaires → Compléments** (Caméra cinématique, Réglages) et, dans l'espace **Animation**,
-   un panneau **CAMÉRA CINÉMATIQUE** (Créer l'animation de rotation, Réglages).
+   onglet **ANIMATION**, un panneau **CAMÉRA CINÉMATIQUE** (Créer une animation caméra, Réglages).
 
 ## Vérifier dans Fusion : recette automatique
 
@@ -50,6 +64,7 @@ Exécuter ; le rapport s'écrit dans `essai/resultats/recette-….md`. Vérifica
 | `sens` | `1` | `1` ou `-1` |
 | `axe` | `"auto"` | Axe vertical : `"auto"` (préférence Fusion Y ou Z en haut), `"y"`, `"z"` |
 | `cadrer` | `true` | Recentrer et cadrer le modèle au départ |
+| `anim_mouvement`, `anim_duree_s`, `anim_zoom_pct` | `platine`, `60`, `100` | Derniers choix du dialogue d'animation |
 | `restaurer_vue` | `false` | `false` = arrêt net (MobPrez) ; `true` = retour en douceur à la vue d'avant |
 
 Le dialogue Réglages s'applique tout de suite. Les autres clés : modifier le fichier, puis Arrêter / Exécuter l'add-in.
@@ -75,8 +90,10 @@ la souris ; 5 s ferait tourner la vue sous les yeux en plein travail. Réglable.
   le mouvement seul de la souris non. Les 0,4 s qui suivent le clic sont ignorées (relâcher le bouton).
 - Vue bougée par autre chose (souris 3D, vue nommée, ViewCube) : la rotation rend la main aussitôt, et
   ne repart seule qu'après un nouveau temps d'attente complet.
-- Animation : nouveau storyboard propre, enregistrement des vues allumé, une vue tous les 5° posée à son
-  instant (72 vues pour un tour), puis enregistrement éteint. API Animation de Fusion en **preview**
+- Animation : nouveau storyboard propre, créé pas à pas hors de la commande (pendant une commande, Fusion
+  n'enregistre rien) : enregistrement des vues allumé, puis pour chaque vue clé la tête de lecture et la
+  caméra. Vues clés assez serrées pour que Fusion suive les courbes (`cinecam/mouvements.py`) ; une coupe
+  franche = deux vues à 0,04 s d'écart. API Animation de Fusion en **preview**
   (depuis mai 2026) : Autodesk peut la changer.
 - Jamais de modification du document : seule la caméra de la vue change.
 

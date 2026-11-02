@@ -1,6 +1,6 @@
 # État — Caméra cinématique (CinematicCamera)
 
-Mis à jour le 2026-11-02 (0.2.1 : animation créée pas à pas, hors de la commande).
+Mis à jour le 2026-11-02 (0.3.0 : mouvements d'animation, dialogue avant création, onglet ANIMATION).
 
 ## Historique
 
@@ -15,6 +15,21 @@ Mis à jour le 2026-11-02 (0.2.1 : animation créée pas à pas, hors de la comm
   chaque geste (enregistrement allumé et relu, tête de lecture, caméra). Contrôle après 3 vues : si la fin
   du storyboard n'avance pas, deuxième méthode avec transition douce de Fusion (≈ 1 min) ; sinon abandon
   avec message et diagnostic dans `journal.log` (états relus, commandes d'enregistrement de Fusion).
+- 0.2.1, essai de Romain [vérifié] : l'animation fonctionne. Le panneau tombait dans l'onglet OUTILS.
+- 0.3.0 : dialogue avant création (mouvement, durée, zoom), 8 mouvements (`cinecam/mouvements.py`),
+  panneau dans l'onglet ANIMATION, dialogue Réglages réduit aux champs (sans texte, sans curseur).
+
+## 0.3.0 — à vérifier dans Fusion [supposé]
+
+| Code | Geste | Attendu |
+|---|---|---|
+| W1 | Espace Animation | panneau CAMÉRA CINÉMATIQUE dans l'onglet ANIMATION, plus dans OUTILS |
+| W2 | Réglages | trois champs seulement, durée d'un tour en valeur (pas de curseur), pas de texte |
+| W3 | Créer une animation caméra | dialogue : Mouvement, Durée (s), Zoom (%) ; changer de mouvement remet sa durée par défaut |
+| W4 | Chaque mouvement, durée par défaut, zoom 100 % | storyboard créé, lecture fluide, modèle cadré |
+| W5 | Edit supercar | six plans, coupes franches (pas de glissé de 0,04 s visible) |
+| W6 | Zoom 200 % puis 50 % | deux fois plus près, puis plus loin |
+| W7 | Platine, spirale, balancier en lecture en boucle | aucun à-coup au raccord |
 
 ## 0.2.0 — nouveautés à vérifier dans Fusion [supposé]
 

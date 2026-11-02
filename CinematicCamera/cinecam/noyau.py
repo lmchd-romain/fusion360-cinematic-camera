@@ -80,6 +80,9 @@ class Reglages:
     axe: str = "auto"                # "auto" (préférence Fusion), "y", "z"
     cadrer: bool = True              # cadrer le modèle au démarrage
     restaurer_vue: bool = False      # False = arrêt net comme MobPrez ; True = rendre la vue d'avant
+    anim_mouvement: str = "platine"  # dernier mouvement choisi pour une animation (voir mouvements.py)
+    anim_duree_s: float = 60.0       # durée de l'animation : plus long = plus lent
+    anim_zoom_pct: float = 100.0     # 100 = modèle entier, 200 = deux fois plus près
 
     BORNES = {
         "delai_s": (5.0, 3600.0),
@@ -87,7 +90,10 @@ class Reglages:
         "inclinaison_deg": (-60.0, 80.0),
         "cadence_hz": (1.0, 60.0),
         "recadrage_s": (0.0, 30.0),
+        "anim_duree_s": (3.0, 600.0),
+        "anim_zoom_pct": (50.0, 300.0),
     }
+    CHOIX = {"axe": ("auto", "y", "z")}   # complété par mouvements.py (anim_mouvement)
 
     @classmethod
     def depuis_dict(cls, d: dict | None) -> "Reglages":
@@ -112,7 +118,7 @@ class Reglages:
                         lo, hi = cls.BORNES[f.name]
                         setattr(r, f.name, min(hi, max(lo, v)))
                 elif isinstance(defaut, str):
-                    if str(v).lower() in ("auto", "y", "z"):
+                    if str(v).lower() in cls.CHOIX.get(f.name, ()):
                         setattr(r, f.name, str(v).lower())
             except (TypeError, ValueError):
                 pass

@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from .mouvements import NOMS as MOUVEMENTS  # import : déclare les mouvements permis dans Reglages
 from .noyau import Reglages
 
 
@@ -17,3 +18,5 @@ def lire(chemin: Path) -> Reglages:
 def ecrire(chemin: Path, r: Reglages) -> None:
     Path(chemin).write_text(json.dumps(r.vers_dict(), indent=2, ensure_ascii=False) + "\n",
                             encoding="utf-8")
+
+__all__ = ["lire", "ecrire", "MOUVEMENTS"]

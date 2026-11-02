@@ -1,4 +1,4 @@
-"""Animation : un storyboard de l'espace Animation de Fusion, qui fait un tour complet du modèle.
+"""Animation : un storyboard de l'espace Animation de Fusion, qui joue un mouvement de `mouvements`.
 
 API Animation de Fusion : en preview depuis mai 2026.
 
@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import time
 
-from . import noyau
+from . import mouvements, noyau
 from .fusion_camera import PiloteCamera, boite_modele, design_actif
 
 # Une étape rendue par le générateur = un tic (≈ 1/30 s) rendu à Fusion avant la suivante.
@@ -87,10 +87,15 @@ def etapes(app, reglages: noyau.Reglages, log, resultat: dict):
              getattr(gestion, "recordingMode", "?"))
 
     pilote = PiloteCamera(app, log)
-    trajet = pilote.preparer(reglages, 0.0)     # déjà cadré au premier instant : la vidéo boucle
+    trajet = pilote.preparer(reglages, 0.0)     # repère du modèle, vu du côté de la vue de départ
     if trajet is None:
         raise ErreurAnimation("Aucune vue active.")
-    vues = noyau.instants_animation(reglages.vitesse_deg_s, reglages.sens)
+    mouvement = mouvements.PAR_NOM.get(reglages.anim_mouvement, mouvements.CATALOGUE[0])
+    rep = mouvements.Repere(trajet.cible1, pilote.rayon, trajet.distance1, trajet.axe, trajet.h0, trajet.p0)
+    vues = mouvements.cles(mouvement, reglages.anim_duree_s, rep, reglages.anim_zoom_pct / 100.0)
+    etendue = trajet.etendue(0.0)
+    log.info("animation : mouvement %s, %.0f s, zoom %.0f %%, %d vues", mouvement.nom, reglages.anim_duree_s,
+             reglages.anim_zoom_pct, len(vues))
 
     for methode in METHODES:
         storyboard.isViewRecordingOn = True
@@ -99,11 +104,10 @@ def etapes(app, reglages: noyau.Reglages, log, resultat: dict):
         log.info("animation, méthode %s : enregistrement demandé, relu %s", methode, allume)
         attente = ATTENTE_LISSE if methode == "lisse" else ATTENTE_DIRECTE
         enregistre = True
-        for k, (instant, angle) in enumerate(vues):
-            storyboard.playheadPosition = instant
+        for k, cle in enumerate(vues):
+            storyboard.playheadPosition = cle.t
             yield
-            pose = trajet.pose(0.0, angle)
-            pilote._appliquer(pose, etendue=trajet.etendue(0.0))
+            pilote._appliquer(cle.pose, etendue=None if etendue is None else etendue * cle.facteur)
             if methode == "lisse":
                 cam = pilote.vue.camera
                 cam.isSmoothTransition = True
@@ -114,14 +118,15 @@ def etapes(app, reglages: noyau.Reglages, log, resultat: dict):
                 fin = _fin(storyboard)
                 log.info("animation, méthode %s : après %d vues, tête %s, fin du storyboard %.2f s",
                          methode, k + 1, storyboard.playheadPosition, fin)
-                if fin < vues[1][0] * 0.5:
+                if fin < vues[1].t * 0.5:
                     enregistre = False
                     break
         if enregistre:
             storyboard.playheadPosition = 0
-            resultat.update(duree=vues[-1][0], vues=len(vues), methode=methode, fin=_fin(storyboard))
+            resultat.update(duree=vues[-1].t, vues=len(vues), methode=methode, fin=_fin(storyboard),
+                            mouvement=mouvement.libelle, boucle=mouvement.boucle)
             log.info("animation créée : méthode %s, %d vues, %.1f s, fin du storyboard %.1f s, %.1f s de calcul",
-                     methode, len(vues), vues[-1][0], _fin(storyboard), time.perf_counter() - t0)
+                     methode, len(vues), vues[-1].t, _fin(storyboard), time.perf_counter() - t0)
             return
         storyboard.playheadPosition = 0
         yield
