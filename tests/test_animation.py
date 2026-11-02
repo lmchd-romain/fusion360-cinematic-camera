@@ -1,4 +1,5 @@
 """Création d'animation pas à pas, avec un faux storyboard : enregistre, n'enregistre qu'en lisse, ou jamais."""
+import math
 import sys
 import types
 
@@ -9,15 +10,20 @@ from tests import faux_adsk
 
 class FauxCamera:
     isSmoothTransition = False
+    perspectiveAngle = 0.0
 
 
 class FauxVue:
     def __init__(self, sb):
         self.sb = sb
+        self.angle = math.radians(45)
+        self.angles = {}          # temps → angle posé (le faux storyboard « garde » l'angle)
 
     @property
     def camera(self):
-        return FauxCamera()
+        c = FauxCamera()
+        c.perspectiveAngle = self.sb.angles.get(self.sb.playheadPosition, self.angle)
+        return c
 
     @camera.setter
     def camera(self, cam):
@@ -31,6 +37,7 @@ class FauxStoryboard:
         self.playheadPosition = 0.0
         self.end = 0.0
         self.isActive = False
+        self.angles = {}
 
     def activate(self):
         self.isActive = True
@@ -62,11 +69,18 @@ def jouer(animation, noyau, monkeypatch, enregistre_si, **reglages):
         def __init__(self, app, log):
             self.vue = vue
             self.rayon = 50.0
+            self.camera_avant = types.SimpleNamespace(perspectiveAngle=math.radians(45))
+            self.angles_poses = []
+
+        def poser_angle(self, a):
+            self.angles_poses.append(a)
 
         def preparer(self, reglages, duree, boite=None):
             return noyau.Trajet((0, 0, 1), (100, 0, 0), (0, 0, 0), (0, 0, 0), 100, 35, 0)
 
-        def _appliquer(self, pose, etendue=None):
+        def _appliquer(self, pose, etendue=None, angle_deg=None):
+            if angle_deg is not None:
+                sb.angles[sb.playheadPosition] = math.radians(angle_deg)
             vue.camera = FauxCamera()
 
     monkeypatch.setattr(animation, "PiloteCamera", Pilote)
@@ -105,3 +119,9 @@ def test_chaque_mouvement_se_cree(module, monkeypatch):
         sb, r, _ = jouer(animation, noyau, monkeypatch, "toujours", anim_mouvement=m.nom, anim_duree_s=12.0,
                          anim_zoom_pct=150.0)
         assert r["mouvement"] == m.libelle and sb.end >= 12.0
+
+
+def test_vertigo_angle_de_vue_garde_et_rendu(module, monkeypatch):
+    animation, noyau = module
+    sb, r, _ = jouer(animation, noyau, monkeypatch, "toujours", anim_mouvement="vertigo", anim_duree_s=10.0)
+    assert r["fov_garde"] is True

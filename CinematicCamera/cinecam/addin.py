@@ -99,6 +99,9 @@ def _pas_animation() -> None:
     except StopIteration:
         r = _etat.get("animation_resultat") or {}
         fin = "Elle boucle sans à-coup. " if r.get("boucle") else ""
+        if r.get("fov_garde") is False:
+            fin += ("\nAttention : Fusion n'a pas gardé les changements d'angle de vue dans le storyboard "
+                    "(voir journal.log). ")
         ui.messageBox(f"Animation créée : {r.get('mouvement', '')}, {r.get('duree', 0):.0f} s ({r.get('vues', 0)} vues).\n"
                       f"{fin}Lecture : bouton Lecture sous la timeline du storyboard.", "Caméra cinématique")
     except animation.ErreurAnimation as e:
@@ -222,7 +225,7 @@ class GestionReglagesFin(adsk.core.CommandEventHandler):
 
 
 # ---------------------------------------------------------------- animation
-IN_MOUVEMENT, IN_DUREE, IN_ZOOM, IN_CIBLE = "mouvement", "duree", "zoom", "cible"
+IN_MOUVEMENT, IN_DUREE, IN_ZOOM, IN_FOV, IN_CIBLE = "mouvement", "duree", "zoom", "fov", "cible"
 
 
 class GestionAnimation(adsk.core.CommandCreatedEventHandler):
@@ -248,6 +251,11 @@ class GestionAnimation(adsk.core.CommandCreatedEventHandler):
             zoom = inputs.addIntegerSpinnerCommandInput(IN_ZOOM, "Zoom (%)", 50, 300, 10,
                                                         int(round(r.anim_zoom_pct)))
             zoom.tooltip = "100 % = modèle entier à l'image ; 200 % = deux fois plus près ; 50 % = plus loin."
+            fov = inputs.addIntegerSpinnerCommandInput(IN_FOV, "Angle de vue (°)", 0, 120, 5,
+                                                       int(round(r.anim_fov_deg)))
+            fov.tooltip = ("Objectif de la caméra : 0 = celui de la vue actuelle ; 15 = téléobjectif (aplati) ; "
+                           "45 = normal ; 90 = grand angle (perspective exagérée). Les mouvements à effet "
+                           "d'objectif (Vertigo, Grand angle…) gardent le leur.")
             cible = inputs.addSelectionInput(IN_CIBLE, "Cadrer sur", "Pièces à filmer (facultatif)")
             cible.addSelectionFilter("Occurrences")
             cible.addSelectionFilter("SolidBodies")
@@ -296,6 +304,7 @@ class GestionAnimationOK(adsk.core.CommandEventHandler):
             r.anim_mouvement = _mouvement_choisi(inputs).nom
             r.anim_duree_s = float(adsk.core.IntegerSpinnerCommandInput.cast(inputs.itemById(IN_DUREE)).value)
             r.anim_zoom_pct = float(adsk.core.IntegerSpinnerCommandInput.cast(inputs.itemById(IN_ZOOM)).value)
+            r.anim_fov_deg = float(adsk.core.IntegerSpinnerCommandInput.cast(inputs.itemById(IN_FOV)).value)
             reglages_fichier.ecrire(FICHIER_REGLAGES, r)
             if machine.etat == noyau.ROTATION:
                 _appliquer(machine._arreter(time.monotonic()))

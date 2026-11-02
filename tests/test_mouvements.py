@@ -93,3 +93,30 @@ def test_quatre_faces_s_arrete_entre_les_quarts():
     f = m.PAR_NOM["quatre_faces"].segments[0].cadre
     assert f(0.2).az == pytest.approx(90) and f(0.24).az == pytest.approx(90)     # pause
     assert f(0.5).az == pytest.approx(180) and f(1.0).az == pytest.approx(360)
+
+
+REP_P = m.Repere((0, 0, 0), 50.0, 100.0, (0, 0, 1), (1, 0, 0), (0, 1, 0), angle=30.0)
+
+
+def test_vertigo_garde_la_taille_du_modele():
+    cles = m.cles(m.PAR_NOM["vertigo"], 10, REP_P)
+    tailles = {round(n.norme(n.soustrait(c.pose.oeil, c.pose.cible)) * math.sin(math.radians(c.fov) / 2), 6)
+               for c in cles}
+    assert len(tailles) == 1
+    fovs = [c.fov for c in cles]
+    assert max(fovs) == pytest.approx(80) and min(fovs) == pytest.approx(14)
+    assert all(abs(b.fov - a.fov) < m.FOV_MAX + 0.5 for a, b in zip(cles, cles[1:]))
+
+
+def test_angle_de_vue_du_dialogue_et_vue_orthographique():
+    c = m.cles(m.PAR_NOM["platine"], 60, REP_P, fov=90)[0]
+    assert c.fov == 90
+    assert n.norme(n.soustrait(c.pose.oeil, c.pose.cible)) == pytest.approx(
+        100 * math.sin(math.radians(15)) / math.sin(math.radians(45)))
+    assert m.cles(m.PAR_NOM["vertigo"], 10, REP)[0].fov is None        # orthographique : pas d'objectif
+    assert m.cles(m.PAR_NOM["grand_angle"], 8, REP_P, fov=20)[0].fov == 95   # le mouvement garde le sien
+
+
+def test_coups_de_zoom_resserrent_l_objectif():
+    f = m.PAR_NOM["coups_zoom"].segments[0].cadre
+    assert f(0).fov == 60 and f(0.2).fov == pytest.approx(38) and f(1).fov == pytest.approx(15)

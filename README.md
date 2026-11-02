@@ -25,6 +25,14 @@ Add-in Fusion : la vue tourne lentement autour du modèle, en douceur, comme une
   | Approche lente | avance tout droit, de loin à tout près | 8 s |
   | Orbite en 8 | dessine un huit autour du modèle ; boucle | 24 s |
   | Descente en tornade | part du zénith, descend en spirale d'un tour et demi | 14 s |
+  | Vertigo (dolly zoom) | recule en resserrant l'objectif, modèle de même taille ; puis l'inverse ; boucle | 10 s |
+  | Grand angle supercar | objectif très large, tout près, au ras du sol | 8 s |
+  | Téléobjectif | objectif très serré, de loin : perspective aplatie | 12 s |
+  | Coups de zoom | trois zooms secs de l'objectif, avec pauses | 6 s |
+
+  **Angle de vue (°)** : objectif de la caméra pour tous les mouvements (0 = celui de la vue actuelle ;
+  15 téléobjectif, 45 normal, 90 grand angle). Les mouvements à effet d'objectif gardent le leur. Après la
+  création, la vue reprend son angle de départ.
 
   **Cadrer sur** (facultatif) : choisir une ou plusieurs pièces ; le mouvement tourne autour d'elles au
   lieu du modèle entier (avec « Approche lente » : gros plan sur un détail).

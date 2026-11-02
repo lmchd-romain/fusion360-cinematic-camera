@@ -83,6 +83,7 @@ class Reglages:
     anim_mouvement: str = "platine"  # dernier mouvement choisi pour une animation (voir mouvements.py)
     anim_duree_s: float = 60.0       # durée de l'animation : plus long = plus lent
     anim_zoom_pct: float = 100.0     # 100 = modèle entier, 200 = deux fois plus près
+    anim_fov_deg: float = 0.0        # angle de vue de l'animation ; 0 = celui de la vue actuelle
 
     BORNES = {
         "delai_s": (5.0, 3600.0),
@@ -92,6 +93,7 @@ class Reglages:
         "recadrage_s": (0.0, 30.0),
         "anim_duree_s": (3.0, 600.0),
         "anim_zoom_pct": (50.0, 300.0),
+        "anim_fov_deg": (0.0, 120.0),
     }
     CHOIX = {"axe": ("auto", "y", "z")}   # complété par mouvements.py (anim_mouvement)
 

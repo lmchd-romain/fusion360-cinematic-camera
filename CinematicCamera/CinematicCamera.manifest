@@ -6,7 +6,7 @@
 	"description": {
 		"": "Caméra cinématique : rotation lente et douce autour du modèle, au bouton ou en absence ; crée aussi une animation de rotation."
 	},
-	"version": "0.4.0",
+	"version": "0.5.0",
 	"runOnStartup": false,
 	"supportedOS": "windows",
 	"editEnabled": true

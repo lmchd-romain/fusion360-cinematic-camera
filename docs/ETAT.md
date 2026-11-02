@@ -1,6 +1,6 @@
 # État — Caméra cinématique (CinematicCamera)
 
-Mis à jour le 2026-11-02 (0.4.0 : 13 mouvements, « Cadrer sur », sonde du mouvement des pièces).
+Mis à jour le 2026-11-02 (0.5.0 : effets d'angle de vue, FOV).
 
 ## Historique
 
@@ -38,6 +38,21 @@ Mis à jour le 2026-11-02 (0.4.0 : 13 mouvements, « Cadrer sur », sonde du mou
 | X1 | Les 5 nouveaux mouvements (quatre faces, héroïque, approche, huit, tornade) | lecture fluide, modèle cadré |
 | X2 | « Cadrer sur » une poignée ou un tiroir + Approche lente | gros plan qui finit sur la pièce |
 | X3 | Sonde pièces (`essai/sonde_pieces/MESSAGE.md` dans Claude Desktop) | rapport `essai/resultats/sonde-pieces-*.json` |
+
+## 0.5.0 — angle de vue (FOV) [supposé]
+
+`Camera.perspectiveAngle` se pose par l'API ; Fusion garde le champ à la cible, donc l'angle d'abord, la
+position ensuite [vérifié dans fusion360-lens]. Inconnu : le storyboard garde-t-il l'angle de vue dans ses
+actions de vue ? L'add-in le vérifie seul après chaque création (relecture à l'instant le plus éloigné de
+l'angle de départ, ligne « angle de vue … gardé / PAS gardé » dans `journal.log`, avertissement à l'écran
+si non).
+
+| Code | Geste | Attendu |
+|---|---|---|
+| Y1 | Vertigo, 10 s | le modèle garde sa taille, la perspective s'écrase puis s'ouvre ; pas d'avertissement |
+| Y2 | Grand angle supercar ; Téléobjectif | perspective exagérée ; perspective aplatie |
+| Y3 | Platine avec Angle de vue 90 puis 15 | grand angle, puis téléobjectif |
+| Y4 | Après création, retour dans Conception | angle de vue d'avant |
 
 ## Mouvement des pièces (éclaté, ordre de montage, portes, tiroirs, couvercle)
 

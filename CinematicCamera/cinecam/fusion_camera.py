@@ -5,6 +5,7 @@ Unités : cm (unités internes de Fusion), passées telles quelles au noyau.
 """
 from __future__ import annotations
 
+import math
 import time
 
 import adsk.core
@@ -133,7 +134,25 @@ class PiloteCamera:
     def en_cours(self) -> bool:
         return self.depart is not None
 
-    def _appliquer(self, pose: noyau.Pose, etendue: float | None = None):
+    def poser_angle(self, angle_deg: float) -> None:
+        """Change l'angle de vue (objectif) seul.
+
+        Fusion garde le champ vu à la cible : un nouvel angle déplace l'œil, et l'affectation suivante de
+        l'œil le remet à sa place en gardant l'angle [vérifié dans fusion360-lens, `tile_camera`]. Donc :
+        l'angle d'abord, la position ensuite.
+        """
+        cam = self.vue.camera
+        voulu = math.radians(angle_deg)
+        if abs(cam.perspectiveAngle - voulu) < 1e-5:
+            return
+        cam.perspectiveAngle = voulu
+        cam.isSmoothTransition = False
+        cam.isFitView = False
+        self.vue.camera = cam
+
+    def _appliquer(self, pose: noyau.Pose, etendue: float | None = None, angle_deg: float | None = None):
+        if angle_deg is not None:
+            self.poser_angle(angle_deg)
         cam = self.vue.camera
         cam.eye = _point(pose.oeil)
         cam.target = _point(pose.cible)

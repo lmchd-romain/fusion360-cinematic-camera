@@ -13,10 +13,11 @@ caméra posée. Après deux vues, la fin du storyboard doit avoir avancé ; sino
 """
 from __future__ import annotations
 
+import math
 import time
 
 from . import mouvements, noyau
-from .fusion_camera import PiloteCamera, boite_modele, design_actif
+from .fusion_camera import PiloteCamera, _est_ortho, boite_modele, design_actif
 
 # Une étape rendue par le générateur = un tic (≈ 1/30 s) rendu à Fusion avant la suivante.
 ATTENTE_DIRECTE = 2       # tics après une caméra posée sans transition
@@ -91,11 +92,15 @@ def etapes(app, reglages: noyau.Reglages, log, resultat: dict, boite=None):
     if trajet is None:
         raise ErreurAnimation("Aucune vue active.")
     mouvement = mouvements.PAR_NOM.get(reglages.anim_mouvement, mouvements.CATALOGUE[0])
-    rep = mouvements.Repere(trajet.cible1, pilote.rayon, trajet.distance1, trajet.axe, trajet.h0, trajet.p0)
-    vues = mouvements.cles(mouvement, reglages.anim_duree_s, rep, reglages.anim_zoom_pct / 100.0)
+    avant = pilote.camera_avant
+    angle0 = None if _est_ortho(avant) else math.degrees(avant.perspectiveAngle)
+    rep = mouvements.Repere(trajet.cible1, pilote.rayon, trajet.distance1, trajet.axe, trajet.h0, trajet.p0,
+                            angle0)
+    fov = reglages.anim_fov_deg if reglages.anim_fov_deg >= mouvements.FOV_BORNES[0] else None
+    vues = mouvements.cles(mouvement, reglages.anim_duree_s, rep, reglages.anim_zoom_pct / 100.0, fov)
     etendue = trajet.etendue(0.0)
-    log.info("animation : mouvement %s, %.0f s, zoom %.0f %%, %d vues", mouvement.nom, reglages.anim_duree_s,
-             reglages.anim_zoom_pct, len(vues))
+    log.info("animation : mouvement %s, %.0f s, zoom %.0f %%, angle de vue %s → %s, %d vues", mouvement.nom,
+             reglages.anim_duree_s, reglages.anim_zoom_pct, angle0, fov, len(vues))
 
     for methode in METHODES:
         storyboard.isViewRecordingOn = True
@@ -107,7 +112,8 @@ def etapes(app, reglages: noyau.Reglages, log, resultat: dict, boite=None):
         for k, cle in enumerate(vues):
             storyboard.playheadPosition = cle.t
             yield
-            pilote._appliquer(cle.pose, etendue=None if etendue is None else etendue * cle.facteur)
+            pilote._appliquer(cle.pose, etendue=None if etendue is None else etendue * cle.facteur,
+                              angle_deg=cle.fov)
             if methode == "lisse":
                 cam = pilote.vue.camera
                 cam.isSmoothTransition = True
@@ -122,7 +128,29 @@ def etapes(app, reglages: noyau.Reglages, log, resultat: dict, boite=None):
                     enregistre = False
                     break
         if enregistre:
+            storyboard.isViewRecordingOn = False
+            yield
+            # L'angle de vue est-il gardé par le storyboard ? On se place sur la vue la plus éloignée de
+            # l'angle de départ, on relit, puis on rend l'angle de départ à la vue (sinon il reste, comme
+            # celui de l'espace Rendu).
+            fov_ok = None
+            if angle0 is not None and any(c.fov is not None and abs(c.fov - angle0) > 3 for c in vues):
+                temoin = max(vues, key=lambda c: abs((c.fov or angle0) - angle0))
+                storyboard.playheadPosition = temoin.t
+                for _ in range(10):
+                    yield
+                lu = math.degrees(pilote.vue.camera.perspectiveAngle)
+                fov_ok = abs(lu - temoin.fov) < 1.5
+                log.info("animation : angle de vue à %.2f s attendu %.1f°, relu %.1f° → %s", temoin.t, temoin.fov,
+                         lu, "gardé" if fov_ok else "PAS gardé")
             storyboard.playheadPosition = 0
+            yield
+            if angle0 is not None:
+                try:
+                    pilote.poser_angle(angle0)
+                except Exception:
+                    pass
+            resultat.update(fov_garde=fov_ok)
             resultat.update(duree=vues[-1].t, vues=len(vues), methode=methode, fin=_fin(storyboard),
                             mouvement=mouvement.libelle, boucle=mouvement.boucle)
             log.info("animation créée : méthode %s, %d vues, %.1f s, fin du storyboard %.1f s, %.1f s de calcul",

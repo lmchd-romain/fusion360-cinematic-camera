@@ -24,3 +24,6 @@ Décisions produit (**décidé** = Romain ; **mon choix** = l'agent, contestable
   lente, orbite en 8, descente en tornade) et « Cadrer sur » des pièces choisies.
 - 2026-11-02 (ouvert) : animer les pièces (éclaté, ordre de montage, portes, tiroirs, couvercle de flight-case) :
   voie choisie après la sonde `essai/sonde_pieces`.
+- 2026-11-02 (mon choix, à essayer) : effets d'angle de vue : Vertigo (dolly zoom), Grand angle supercar,
+  Téléobjectif, Coups de zoom, et champ « Angle de vue » dans le dialogue d'animation. La vue reprend son
+  angle d'avant après la création.

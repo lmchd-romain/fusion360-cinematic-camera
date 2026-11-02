@@ -21,7 +21,9 @@ ECART_MAX = 0.06          # écart d'œil maximal entre deux vues, en part de la
 ECART_CIBLE_MAX = 0.03
 INTERVALLE_MAX_S = 1.0
 AZIMUT_MAX = 5.0          # degrés de rotation au plus entre deux vues (vue de dessus : l'œil bouge peu)
+FOV_MAX = 2.0             # degrés d'angle de vue au plus entre deux vues
 FINESSE = 400             # points examinés par segment pour placer les vues
+FOV_BORNES = (5.0, 120.0)
 HAUTEUR_MAX = 85.0        # au-delà, le haut de la vue se confond avec le regard
 
 
@@ -31,6 +33,7 @@ class Cadre:
     el: float                      # degrés au-dessus de l'horizon
     dist: float = 1.0              # facteur de la distance qui cadre le modèle entier
     decal: Vec = (0.0, 0.0, 0.0)   # décalage de la cible, en rayons : (devant, côté, haut)
+    fov: float | None = None       # angle de vue (degrés) ; None = celui choisi dans le dialogue, ou l'actuel
 
 
 @dataclass(frozen=True)
@@ -69,8 +72,9 @@ def _mix(a: float, b: float, s: float) -> float:
 def glisse(a: Cadre, b: Cadre, courbe=doux) -> Callable[[float], Cadre]:
     def f(u: float) -> Cadre:
         s = courbe(u)
+        fov = None if a.fov is None or b.fov is None else _mix(a.fov, b.fov, s)
         return Cadre(_mix(a.az, b.az, s), _mix(a.el, b.el, s), _mix(a.dist, b.dist, s),
-                     tuple(_mix(x, y, s) for x, y in zip(a.decal, b.decal)))
+                     tuple(_mix(x, y, s) for x, y in zip(a.decal, b.decal)), fov)
     return f
 
 
@@ -102,6 +106,14 @@ def _quatre_faces(u):
 def _huit(u):
     w = 2 * math.pi * u
     return Cadre(50.0 * math.sin(w), 25.0 + 15.0 * math.sin(2 * w), 1.0)
+
+
+def _coups_de_zoom(u):
+    """Trois coups de zoom secs (angle de vue qui se resserre vite), chacun suivi d'un temps de pose."""
+    k = min(2, int(u * 3))
+    v = u * 3 - k
+    fovs = (60.0, 38.0, 24.0, 15.0)
+    return Cadre(10.0 + 20.0 * u, 20.0, 1.0, fov=_mix(fovs[k], fovs[k + 1], doux(min(1.0, v / 0.15))))
 
 
 def _tornade(u):
@@ -159,6 +171,22 @@ CATALOGUE: tuple[Mouvement, ...] = (
     Mouvement("huit", "Orbite en 8",
               "La caméra dessine un huit autour du modèle : va-et-vient en montant et descendant. Boucle.",
               24.0, (Segment(1, _huit),), boucle=True),
+    Mouvement("vertigo", "Vertigo (dolly zoom)",
+              "Effet Hitchcock : la caméra recule pendant que l'angle de vue se resserre ; le modèle garde sa "
+              "taille, la perspective s'écrase. Puis l'inverse.",
+              10.0, (Segment(1, glisse(Cadre(25, 15, 1.0, fov=80), Cadre(25, 15, 1.0, fov=14))),
+                     Segment(1, glisse(Cadre(25, 15, 1.0, fov=14), Cadre(25, 15, 1.0, fov=80)))), boucle=True),
+    Mouvement("grand_angle", "Grand angle supercar",
+              "Objectif très large, tout près et au ras du sol : perspective exagérée, comme les pubs de "
+              "voiture. Tourne lentement.",
+              8.0, (Segment(1, glisse(Cadre(-40, 5, 0.75, (0, 0, -0.25), 95), Cadre(40, 8, 0.75, (0, 0, -0.25), 95))),)),
+    Mouvement("teleobjectif", "Téléobjectif",
+              "Objectif très serré, de loin : perspective aplatie, rendu photo produit. Tourne lentement.",
+              12.0, (Segment(1, glisse(Cadre(-30, 20, 1.0, fov=12), Cadre(30, 20, 1.0, fov=12))),)),
+    Mouvement("coups_zoom", "Coups de zoom",
+              "Trois zooms secs de l'objectif, chacun suivi d'une pause, sur un lent glissement. "
+              "Avec « Cadrer sur », zoome vers la pièce choisie.",
+              6.0, (Segment(1, _coups_de_zoom),)),
     Mouvement("tornade", "Descente en tornade",
               "Part du zénith et descend en spirale d'un tour et demi jusqu'à une vue de trois-quarts.",
               14.0, (Segment(1, _tornade),)),
@@ -179,10 +207,15 @@ class Repere:
     axe: Vec             # haut du monde, unitaire
     devant: Vec          # direction horizontale de la cible vers l'œil de la vue de départ, unitaire
     cote: Vec            # axe ^ devant
+    angle: float | None = None   # angle de vue de départ (degrés) ; None = vue orthographique (pas d'objectif)
 
 
-def pose(rep: Repere, c: Cadre, zoom: float = 1.0) -> tuple[Pose, float]:
-    """Pose de la caméra pour un cadre, et facteur d'échelle (pour l'étendue d'une vue orthographique)."""
+def pose(rep: Repere, c: Cadre, zoom: float = 1.0, fov: float | None = None) -> tuple[Pose, float, float | None]:
+    """Pose de la caméra pour un cadre, facteur d'échelle (étendue d'une vue orthographique) et angle de vue.
+
+    Avec un autre angle de vue que celui de départ, la distance change pour que le modèle garde sa taille à
+    l'image (c'est ce qui fait le « dolly zoom »).
+    """
     dx, dy, dz = c.decal
     cible = ajoute(rep.centre, echelle(ajoute(ajoute(echelle(rep.devant, dx), echelle(rep.cote, dy)),
                                               echelle(rep.axe, dz)), rep.rayon))
@@ -190,7 +223,12 @@ def pose(rep: Repere, c: Cadre, zoom: float = 1.0) -> tuple[Pose, float]:
     horiz = ajoute(echelle(rep.devant, math.cos(az)), echelle(rep.cote, math.sin(az)))
     direction = ajoute(echelle(horiz, math.cos(el)), echelle(rep.axe, math.sin(el)))
     facteur = c.dist / max(zoom, 1e-6)
-    return Pose(ajoute(cible, echelle(direction, rep.distance * facteur)), cible, rep.axe), facteur
+    angle = None
+    distance = rep.distance
+    if rep.angle is not None:
+        angle = min(FOV_BORNES[1], max(FOV_BORNES[0], c.fov or fov or rep.angle))
+        distance *= math.sin(math.radians(rep.angle) / 2) / math.sin(math.radians(angle) / 2)
+    return Pose(ajoute(cible, echelle(direction, distance * facteur)), cible, rep.axe), facteur, angle
 
 
 @dataclass(frozen=True)
@@ -198,9 +236,11 @@ class Cle:
     t: float
     pose: Pose
     facteur: float
+    fov: float | None = None
 
 
-def cles(mouvement: Mouvement, duree_s: float, rep: Repere, zoom: float = 1.0) -> list[Cle]:
+def cles(mouvement: Mouvement, duree_s: float, rep: Repere, zoom: float = 1.0,
+         fov: float | None = None) -> list[Cle]:
     """Vues clés de l'animation, du temps 0 à duree_s (plus les coupes)."""
     total = sum(s.part for s in mouvement.segments) or 1.0
     res: list[Cle] = []
@@ -216,14 +256,15 @@ def cles(mouvement: Mouvement, duree_s: float, rep: Repere, zoom: float = 1.0) -
             u = k / FINESSE
             t = t_debut + d * u
             cadre = seg.cadre(u)
-            p, f = pose(rep, cadre, zoom)
+            p, f, a = pose(rep, cadre, zoom, fov)
             if derniere is not None and k < FINESSE:
                 e_oeil = norme(soustrait(p.oeil, derniere.pose.oeil)) / rep.distance
                 e_cible = norme(soustrait(p.cible, derniere.pose.cible)) / rep.distance
+                e_fov = abs((a or 0.0) - (derniere.fov or 0.0))
                 if (e_oeil < ECART_MAX and e_cible < ECART_CIBLE_MAX and abs(cadre.az - az_pose) < AZIMUT_MAX
-                        and t + d / FINESSE - derniere.t <= INTERVALLE_MAX_S):
+                        and e_fov < FOV_MAX and t + d / FINESSE - derniere.t <= INTERVALLE_MAX_S):
                     continue
-            derniere = Cle(t, p, f)
+            derniere = Cle(t, p, f, a)
             az_pose = cadre.az
             res.append(derniere)
         t_debut += d
