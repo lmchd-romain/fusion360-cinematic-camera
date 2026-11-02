@@ -29,8 +29,17 @@ def test_run_puis_stop(addin):
     mod, a, app = addin
     ui = app.userInterface
     mod.run(None)
-    assert a.ID_CMD in ui.commandDefinitions.d
-    assert a.ID_CMD in ui.allToolbarPanels.d["SolidScriptsAddinsPanel"].controls.d
+    panneau = ui.allToolbarPanels.d["SolidScriptsAddinsPanel"].controls.d
+    for id_ in (a.ID_LANCER, a.ID_REGLAGES, a.ID_ANIMATION):
+        assert id_ in ui.commandDefinitions.d
+    assert a.ID_LANCER in panneau and a.ID_REGLAGES in panneau and panneau[a.ID_LANCER].isPromoted
+    anim = ui.allToolbarPanels.d[a.ID_PANNEAU_ANIMATION].controls.d
+    assert a.ID_ANIMATION in anim and a.ID_REGLAGES in anim
+    for id_, dossier in ((a.ID_LANCER, "icone"), (a.ID_REGLAGES, "icone_reglages"),
+                         (a.ID_ANIMATION, "icone_animation")):
+        icones = Path(ui.commandDefinitions.d[id_].ressources)
+        assert icones.name == dossier
+        assert (RACINE / "CinematicCamera" / "ressources" / dossier / "32x32.png").exists()
     assert len(app.evenements[a.ID_EVENEMENT].handlers) == 1
     assert (a.DOSSIER / "reglages.json").exists()
     time.sleep(1.2)
@@ -39,15 +48,23 @@ def test_run_puis_stop(addin):
     app.evenements[a.ID_EVENEMENT].handlers[0].notify(None)
     time.sleep(0.7)
     assert app.tirs == 2
-    # Bouton : passe en arrêt, réglage écrit
-    ui.commandDefinitions.d[a.ID_CMD].commandCreated.handlers[0].notify(None)
-    assert '"actif": false' in (a.DOSSIER / "reglages.json").read_text()
-    assert "ARRÊT" in ui.messages[-1][0]
+    # Bouton lancer sans vue : la machine repart au repos, sans erreur
+    ui.commandDefinitions.d[a.ID_LANCER].commandCreated.handlers[0].notify(None)
+    assert a._etat["machine"].etat == "veille"
+    assert ui.commandDefinitions.d[a.ID_LANCER].controlDefinition.name == a.NOM_LANCER
     mod.stop(None)
-    assert a.ID_CMD not in ui.commandDefinitions.d
+    for id_ in (a.ID_LANCER, a.ID_REGLAGES, a.ID_ANIMATION):
+        assert id_ not in ui.commandDefinitions.d
     assert not ui.allToolbarPanels.d["SolidScriptsAddinsPanel"].controls.d
+    assert a.ID_PANNEAU_ANIMATION not in ui.allToolbarPanels.d
     assert a.ID_EVENEMENT not in app.evenements
     assert not any(t.name == "CinematicCameraVeilleur" for t in __import__("threading").enumerate())
+
+
+def test_resume_des_reglages(addin):
+    _, a, _ = addin
+    assert "après 60 s" in a._resume(True, 60, 150) and "2.4 °/s" in a._resume(True, 60, 150)
+    assert "bouton" in a._resume(False, 60, 30)
 
 
 def test_run_nettoie_un_arret_incomplet(addin):

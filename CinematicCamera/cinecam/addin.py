@@ -1,4 +1,4 @@
-"""Add-in : bouton marche / arrêt, fil de surveillance, événement personnalisé de tic."""
+"""Add-in : boutons (lancer, réglages, animation), fil de surveillance, événement personnalisé de tic."""
 from __future__ import annotations
 
 import json
@@ -11,18 +11,25 @@ import adsk.core
 
 from . import noyau, reglages_fichier
 from .fusion_camera import PiloteCamera
-from .inactivite import creer_lecteur
+from .inactivite import creer_lecteur, creer_lecteur_appuis
 from .journal import journal, fermer
 
 DOSSIER = Path(__file__).resolve().parent.parent
 FICHIER_REGLAGES = DOSSIER / "reglages.json"
+RESSOURCES = DOSSIER / "ressources"
 
-ID_CMD = "lmchdCinematicCamera_basculer"
-ID_EVENEMENT = "lmchdCinematicCamera_tic"
+PREFIXE = "lmchdCinematicCamera"
+ID_LANCER = f"{PREFIXE}_lancer"
+ID_REGLAGES = f"{PREFIXE}_reglages"
+ID_ANIMATION = f"{PREFIXE}_animation"
+ID_EVENEMENT = f"{PREFIXE}_tic"
+ID_PANNEAU_ANIMATION = f"{PREFIXE}_panneauAnimation"
 PANNEAUX = ("SolidScriptsAddinsPanel", "SolidInspectPanel")  # premier trouvé (mon choix)
 COMMANDE_REPOS = "SelectCommand"  # [supposé] id de ui.activeCommand quand aucune commande ne tourne
+NOM_LANCER, NOM_ARRETER = "Caméra cinématique", "Arrêter la caméra cinématique"
 
 _handlers: list = []
+_dialogue: list = []
 _etat: dict = {}
 
 
@@ -55,9 +62,30 @@ def _occupe(app, ui) -> bool:
         if app.activeProduct.objectType != "adsk::fusion::Design":
             return True
         cmd = ui.activeCommand
-        return bool(cmd) and cmd != COMMANDE_REPOS
+        return bool(cmd) and cmd not in (COMMANDE_REPOS, ID_LANCER)
     except Exception:
         return True
+
+
+def _appliquer(action: noyau.Action) -> None:
+    machine: noyau.Machine = _etat["machine"]
+    pilote: PiloteCamera = _etat["pilote"]
+    if action.type == noyau.DEMARRER:
+        if not pilote.demarrer(machine.reglages):
+            machine.echec(time.monotonic())
+    elif action.type == noyau.PAS:
+        if not pilote.pas(action.t_s, action.angle_deg):
+            machine.echec(time.monotonic())
+            pilote.arreter(False)
+    elif action.type == noyau.ARRETER:
+        pilote.arreter(action.restaurer)
+    _maj_nom()
+
+
+def _relancer_le_fil() -> None:
+    veilleur = _etat.get("veilleur")
+    if veilleur is not None and "machine" in _etat:
+        veilleur.intervalle_s = _etat["machine"].intervalle_tic_s()
 
 
 class GestionTic(adsk.core.CustomEventHandler):
@@ -66,58 +94,197 @@ class GestionTic(adsk.core.CustomEventHandler):
         try:
             app, ui = _etat["app"], _etat["ui"]
             machine: noyau.Machine = _etat["machine"]
-            pilote: PiloteCamera = _etat["pilote"]
-            action = machine.etape(_etat["lire_inactivite"](), time.monotonic(), _occupe(app, ui))
-            if action.type == noyau.DEMARRER:
-                if not pilote.demarrer(machine.reglages):
-                    machine.echec()
-            elif action.type == noyau.PAS:
-                pilote.pas(action.t_s, action.angle_deg)
-            elif action.type == noyau.ARRETER:
-                pilote.arreter(action.restaurer)
+            action = machine.etape(_etat["lire_inactivite"](), time.monotonic(), _occupe(app, ui),
+                                   _etat["lire_appuis"]())
+            if action.type != noyau.RIEN:
+                _appliquer(action)
         except Exception:
             journal().error("tic :\n%s", traceback.format_exc())
             try:
-                _etat["machine"].echec()
+                _etat["machine"].echec(time.monotonic())
                 _etat["pilote"].depart = None
+                _maj_nom()
             except Exception:
                 pass
         finally:
+            _relancer_le_fil()
             if veilleur is not None:
-                veilleur.intervalle_s = _etat["machine"].intervalle_tic_s() if "machine" in _etat else 0.5
                 veilleur.en_attente.clear()
 
 
-class GestionBouton(adsk.core.CommandCreatedEventHandler):
+class GestionLancer(adsk.core.CommandCreatedEventHandler):
+    """Un clic : la caméra part tout de suite. Un clic, une touche ou une commande l'arrête."""
+
     def notify(self, args):
         try:
             machine: noyau.Machine = _etat["machine"]
-            actif = not machine.reglages.actif
-            action = machine.basculer(actif)
-            if action.type == noyau.ARRETER:
-                _etat["pilote"].arreter(action.restaurer)
+            action = machine.lancer_maintenant(time.monotonic())
+            journal().info("bouton lancer : %s", action.type)
+            _appliquer(action)
+            _relancer_le_fil()
+        except Exception:
+            journal().error("bouton lancer :\n%s", traceback.format_exc())
+
+
+# ---------------------------------------------------------------- dialogue de réglages
+IN_AUTO, IN_DELAI, IN_TOUR, IN_RESUME = "auto", "delai", "tour", "resume"
+
+
+def _resume(auto: bool, delai: int, tour: int) -> str:
+    vitesse = noyau.vitesse_pour_tour(tour)
+    depart = (f"Démarre seule après {delai} s sans souris ni clavier." if auto
+              else "Ne démarre qu'au bouton « Caméra cinématique ».")
+    return f"{depart}<br>Un tour en {tour} s ({vitesse:.1f} °/s)."
+
+
+class GestionReglages(adsk.core.CommandCreatedEventHandler):
+    def notify(self, args):
+        try:
+            cmd = adsk.core.CommandCreatedEventArgs.cast(args).command
+            cmd.isRepeatable = False
+            cmd.okButtonText = "OK"
+            r = _etat["machine"].reglages
+            inputs = cmd.commandInputs
+            auto = inputs.addBoolValueInput(IN_AUTO, "Rotation quand je m'absente", True, "", r.actif)
+            auto.tooltip = "La vue tourne seule après le temps choisi sans souris ni clavier."
+            delai = inputs.addIntegerSpinnerCommandInput(IN_DELAI, "Temps avant activation (s)", 5, 3600, 5,
+                                                         int(round(r.delai_s)))
+            delai.tooltip = "Secondes sans souris ni clavier avant que la vue se mette à tourner."
+            delai.isEnabled = r.actif
+            tour = inputs.addIntegerSliderCommandInput(IN_TOUR, "Durée d'un tour (s)", 10, 600, False)
+            tour.valueOne = int(round(min(600, max(10, noyau.duree_tour_s(r.vitesse_deg_s)))))
+            tour.tooltip = "Vitesse de rotation : 150 s = lent et calme, 30 s = rapide."
+            inputs.addTextBoxCommandInput(IN_RESUME, "", _resume(r.actif, delai.value, tour.valueOne), 2, True)
+            for h, ev in ((GestionReglagesChange(), cmd.inputChanged), (GestionReglagesOK(), cmd.execute),
+                          (GestionReglagesFin(), cmd.destroy)):
+                ev.add(h)
+                _dialogue.append(h)
+        except Exception:
+            journal().error("réglages :\n%s", traceback.format_exc())
+
+
+def _lire(inputs) -> tuple[bool, int, int]:
+    auto = adsk.core.BoolValueCommandInput.cast(inputs.itemById(IN_AUTO)).value
+    delai = adsk.core.IntegerSpinnerCommandInput.cast(inputs.itemById(IN_DELAI)).value
+    tour = adsk.core.IntegerSliderCommandInput.cast(inputs.itemById(IN_TOUR)).valueOne
+    return auto, delai, tour
+
+
+class GestionReglagesChange(adsk.core.InputChangedEventHandler):
+    def notify(self, args):
+        try:
+            inputs = adsk.core.InputChangedEventArgs.cast(args).inputs
+            auto, delai, tour = _lire(inputs)
+            inputs.itemById(IN_DELAI).isEnabled = auto
+            inputs.itemById(IN_RESUME).formattedText = _resume(auto, delai, tour)
+        except Exception:
+            journal().error("réglages, changement :\n%s", traceback.format_exc())
+
+
+class GestionReglagesOK(adsk.core.CommandEventHandler):
+    def notify(self, args):
+        try:
+            inputs = adsk.core.CommandEventArgs.cast(args).command.commandInputs
+            auto, delai, tour = _lire(inputs)
+            machine: noyau.Machine = _etat["machine"]
+            if machine.etat == noyau.ROTATION:      # la vitesse change : on repart d'un départ propre
+                _appliquer(machine._arreter(time.monotonic()))
+            machine.reglages.delai_s = float(delai)
+            machine.reglages.vitesse_deg_s = noyau.vitesse_pour_tour(tour)
+            machine.basculer(auto)
             reglages_fichier.ecrire(FICHIER_REGLAGES, machine.reglages)
             _maj_nom()
-            r = machine.reglages
-            msg = (f"Caméra auto : MARCHE. Rotation après {r.delai_s:g} s sans souris ni clavier.\n"
-                   f"Auto camera: ON. Turns after {r.delai_s:g} s without mouse or keyboard."
-                   if actif else
-                   "Caméra auto : ARRÊT.\nAuto camera: OFF.")
-            journal().info("bouton : actif=%s", actif)
-            _etat["ui"].messageBox(msg, "CinematicCamera")
+            _relancer_le_fil()
+            journal().info("réglages : %s", json.dumps(machine.reglages.vers_dict(), ensure_ascii=False))
         except Exception:
-            journal().error("bouton :\n%s", traceback.format_exc())
+            journal().error("réglages, OK :\n%s", traceback.format_exc())
 
 
+class GestionReglagesFin(adsk.core.CommandEventHandler):
+    def notify(self, args):
+        _dialogue.clear()
+
+
+# ---------------------------------------------------------------- animation
+class GestionAnimation(adsk.core.CommandCreatedEventHandler):
+    def notify(self, args):
+        cmd = adsk.core.CommandCreatedEventArgs.cast(args).command
+        h = GestionAnimationOK()
+        cmd.execute.add(h)
+        _dialogue.append(h)
+
+
+class GestionAnimationOK(adsk.core.CommandEventHandler):
+    def notify(self, args):
+        from . import animation
+        ui = _etat["ui"]
+        try:
+            machine: noyau.Machine = _etat["machine"]
+            if machine.etat == noyau.ROTATION:
+                _appliquer(machine._arreter(time.monotonic()))
+            duree, n = animation.creer(_etat["app"], machine.reglages, journal())
+            ui.messageBox(f"Animation créée : un tour complet en {duree:.0f} s ({n} vues).\n"
+                          "Elle boucle sans à-coup. Lecture : bouton Lecture sous la timeline du storyboard.\n"
+                          "Vitesse : Réglages de la caméra cinématique.", "Caméra cinématique")
+        except animation.ErreurAnimation as e:
+            ui.messageBox(str(e), "Caméra cinématique")
+        except Exception:
+            journal().error("animation :\n%s", traceback.format_exc())
+            ui.messageBox("L'animation n'a pas pu être créée. Détail dans journal.log (dossier de "
+                          "l'add-in).", "Caméra cinématique")
+        finally:
+            _dialogue.clear()
+
+
+# ---------------------------------------------------------------- interface
 def _maj_nom():
-    d = _etat.get("definition")
-    if d:
-        actif = _etat["machine"].reglages.actif
-        d.controlDefinition.name = "Caméra auto : marche" if actif else "Caméra auto : arrêt"
+    d = _etat.get("def_lancer")
+    if d and "machine" in _etat:
+        d.controlDefinition.name = NOM_ARRETER if _etat["machine"].etat == noyau.ROTATION else NOM_LANCER
+
+
+def _espace_animation(ui):
+    """L'espace de travail Animation, cherché par son id puis par son nom [supposé : id inconnu]."""
+    try:
+        espaces = ui.workspaces
+        for i in range(espaces.count):
+            e = espaces.item(i)
+            if "animation" in (e.id or "").lower() or (e.name or "").strip().lower() == "animation":
+                return e
+    except Exception:
+        journal().error("espace Animation :\n%s", traceback.format_exc())
+    return None
+
+
+def _definition(ui, id_, nom, info, icone, gestion):
+    ancienne = ui.commandDefinitions.itemById(id_)
+    if ancienne:
+        ancienne.deleteMe()
+    d = ui.commandDefinitions.addButtonDefinition(id_, nom, info, str(RESSOURCES / icone))
+    d.commandCreated.add(gestion)
+    _handlers.append(gestion)
+    return d
+
+
+def _nettoyer_interface(ui):
+    for p in PANNEAUX:
+        panneau = ui.allToolbarPanels.itemById(p)
+        if panneau:
+            for id_ in (ID_LANCER, ID_REGLAGES):
+                c = panneau.controls.itemById(id_)
+                if c:
+                    c.deleteMe()
+    panneau = ui.allToolbarPanels.itemById(ID_PANNEAU_ANIMATION)
+    if panneau:
+        panneau.deleteMe()
+    for id_ in (ID_LANCER, ID_REGLAGES, ID_ANIMATION):
+        d = ui.commandDefinitions.itemById(id_)
+        if d:
+            d.deleteMe()
 
 
 def run(context):
-    if _etat:  # run() relancé sans stop() : on repart propre (fil, handlers, bouton)
+    if _etat:  # run() relancé sans stop() : on repart propre (fil, handlers, boutons)
         try:
             stop(context)
         except Exception:
@@ -129,36 +296,38 @@ def run(context):
     if not FICHIER_REGLAGES.exists():
         reglages_fichier.ecrire(FICHIER_REGLAGES, reglages)
     _etat.update(app=app, ui=ui, machine=noyau.Machine(reglages), pilote=PiloteCamera(app, log),
-                 lire_inactivite=creer_lecteur())
+                 lire_inactivite=creer_lecteur(), lire_appuis=creer_lecteur_appuis())
 
-    # Restes d'un arrêt incomplet.
-    for p in PANNEAUX:
-        panneau = ui.allToolbarPanels.itemById(p)
-        if panneau:
-            c = panneau.controls.itemById(ID_CMD)
-            if c:
-                c.deleteMe()
-    ancienne = ui.commandDefinitions.itemById(ID_CMD)
-    if ancienne:
-        ancienne.deleteMe()
+    _nettoyer_interface(ui)
     try:
         app.unregisterCustomEvent(ID_EVENEMENT)
     except Exception:
         pass
 
-    definition = ui.commandDefinitions.addButtonDefinition(
-        ID_CMD, "Caméra auto", "Marche / arrêt de la rotation automatique quand vous êtes absent.\n"
-        "On / off: auto-rotate the view when you are away.", str(DOSSIER / "ressources" / "icone"))
-    h = GestionBouton()
-    definition.commandCreated.add(h)
-    _handlers.append(h)
-    _etat["definition"] = definition
+    lancer = _definition(ui, ID_LANCER, NOM_LANCER,
+                         "Fait tourner la vue lentement autour du modèle, tout de suite.\n"
+                         "Un clic, une touche ou un nouveau clic sur ce bouton l'arrête ; la souris peut bouger.",
+                         "icone", GestionLancer())
+    reglages_def = _definition(ui, ID_REGLAGES, "Réglages de la caméra cinématique",
+                               "Vitesse de rotation, temps avant activation, rotation quand vous vous absentez.",
+                               "icone_reglages", GestionReglages())
+    animation_def = _definition(ui, ID_ANIMATION, "Créer l'animation de rotation",
+                                "Crée un storyboard : un tour complet du modèle, cadré, à la vitesse des "
+                                "réglages. Il boucle sans à-coup.", "icone_animation", GestionAnimation())
+    _etat["def_lancer"] = lancer
     for p in PANNEAUX:
         panneau = ui.allToolbarPanels.itemById(p)
         if panneau:
-            panneau.controls.addCommand(definition)
+            panneau.controls.addCommand(lancer).isPromoted = True
+            panneau.controls.addCommand(reglages_def)
             _etat["panneau"] = p
             break
+    espace = _espace_animation(ui)
+    if espace is not None:
+        panneau = espace.toolbarPanels.add(ID_PANNEAU_ANIMATION, "CAMÉRA CINÉMATIQUE")
+        panneau.controls.addCommand(animation_def).isPromoted = True
+        panneau.controls.addCommand(reglages_def)
+        _etat["espace_animation"] = espace.id
     _maj_nom()
 
     evenement = app.registerCustomEvent(ID_EVENEMENT)
@@ -171,8 +340,9 @@ def run(context):
     veilleur = Veilleur(app)
     _etat["veilleur"] = veilleur
     veilleur.start()
-    log.info("démarré : version %s, réglages %s, panneau %s", app.version,
-             json.dumps(reglages.vers_dict(), ensure_ascii=False), _etat.get("panneau"))
+    log.info("démarré : version %s, réglages %s, panneau %s, espace Animation %s", app.version,
+             json.dumps(reglages.vers_dict(), ensure_ascii=False), _etat.get("panneau"),
+             _etat.get("espace_animation"))
 
 
 def stop(context):
@@ -194,16 +364,9 @@ def stop(context):
             evenement.remove(_etat["gestion_tic"])
         app.unregisterCustomEvent(ID_EVENEMENT)
     if ui:
-        p = _etat.get("panneau")
-        panneau = ui.allToolbarPanels.itemById(p) if p else None
-        if panneau:
-            c = panneau.controls.itemById(ID_CMD)
-            if c:
-                c.deleteMe()
-        d = ui.commandDefinitions.itemById(ID_CMD)
-        if d:
-            d.deleteMe()
+        _nettoyer_interface(ui)
     _handlers.clear()
+    _dialogue.clear()
     log.info("arrêté")
     _etat.clear()
     fermer()

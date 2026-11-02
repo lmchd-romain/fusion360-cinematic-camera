@@ -42,3 +42,31 @@ def creer_lecteur():
         return _lecteur_windows()
     except Exception:
         return lambda: None
+
+
+# Touches lues pour l'arrêt d'une rotation manuelle : boutons de souris (1, 2, 4, 5, 6) et clavier (8–254).
+# Le mouvement seul de la souris n'est pas un appui.
+TOUCHES = (1, 2, 4, 5, 6) + tuple(range(8, 255))
+
+
+def _lecteur_appuis_windows():
+    import ctypes
+
+    user32 = ctypes.windll.user32
+    user32.GetAsyncKeyState.argtypes = [ctypes.c_int]
+    user32.GetAsyncKeyState.restype = ctypes.c_short
+
+    def lire():
+        return any(user32.GetAsyncKeyState(vk) & 0x8000 for vk in TOUCHES)
+
+    return lire
+
+
+def creer_lecteur_appuis():
+    """Rend une fonction sans argument → vrai si un bouton de souris ou une touche est enfoncé."""
+    if sys.platform != "win32":
+        return lambda: False
+    try:
+        return _lecteur_appuis_windows()
+    except Exception:
+        return lambda: False

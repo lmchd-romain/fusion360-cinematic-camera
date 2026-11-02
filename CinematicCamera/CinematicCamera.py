@@ -1,4 +1,4 @@
-"""Point d'entrée de l'add-in CinematicCamera (preuve de concept)."""
+"""Point d'entrée de l'add-in CinematicCamera (caméra cinématique)."""
 import sys
 import traceback
 from pathlib import Path

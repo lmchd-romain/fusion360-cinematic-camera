@@ -285,3 +285,95 @@ def test_distance_perspective_fait_tenir_la_sphere():
     d = n.distance_perspective(50, math.radians(60))
     assert d == pytest.approx(100)          # sin(30°) = 0,5
     assert n.distance_perspective(50, 0) > 0
+
+
+# ------------------------------------------------------------- lancement au bouton
+def test_bouton_lance_tout_de_suite_meme_si_l_utilisateur_vient_de_cliquer():
+    m = machine()
+    assert m.lancer_maintenant(10).type == n.DEMARRER
+    assert m.etat == n.ROTATION and m.manuel
+    a = m.etape(0.0, 11)                     # la souris vient de bouger : on continue
+    assert a.type == n.PAS and a.t_s == pytest.approx(1)
+
+
+def test_bouton_clic_juste_apres_le_lancement_ignore():
+    m = machine()
+    m.lancer_maintenant(10)
+    assert m.etape(0.0, 10.1, appui=True).type == n.PAS    # le bouton de la souris se relâche
+
+
+def test_bouton_arret_sur_clic_ou_touche():
+    m = machine()
+    m.lancer_maintenant(10)
+    a = m.etape(0.0, 12, appui=True)
+    assert a.type == n.ARRETER and m.etat == n.VEILLE and not m.manuel
+
+
+def test_bouton_arret_sur_commande():
+    m = machine()
+    m.lancer_maintenant(10)
+    assert m.etape(0.0, 12, occupe=True).type == n.ARRETER
+
+
+def test_bouton_deuxieme_clic_arrete():
+    m = machine()
+    m.lancer_maintenant(10)
+    assert m.lancer_maintenant(15).type == n.ARRETER and m.etat == n.VEILLE
+
+
+def test_bouton_marche_aussi_rotation_auto_coupee():
+    m = n.Machine(n.Reglages(actif=False))
+    assert m.lancer_maintenant(0).type == n.DEMARRER
+    assert m.etape(999, 1).type == n.PAS
+    assert m.etape(0, 2, appui=True).type == n.ARRETER
+    assert m.etat == n.ARRET                 # revient à « rotation auto coupée »
+
+
+def test_couper_la_rotation_auto_n_arrete_pas_un_lancement_manuel():
+    m = machine()
+    m.lancer_maintenant(0)
+    assert m.basculer(False).type == n.RIEN and m.etat == n.ROTATION
+
+
+def test_rotation_auto_arretee_par_un_appui():
+    m = machine()
+    m.etape(60, 0)
+    assert m.etape(61, 1, appui=True).type == n.ARRETER
+
+
+def test_pas_de_redemarrage_auto_juste_apres_un_arret():
+    # Vue bougée par une souris 3D (aucune saisie comptée) : inactivité toujours grande.
+    m = machine()
+    m.etape(60, 0)
+    m.echec(5)
+    assert m.etat == n.VEILLE
+    assert m.etape(70, 10).type == n.RIEN    # 5 s après l'arrêt : non
+    assert m.etape(130, 65).type == n.DEMARRER
+
+
+def test_echec_garde_la_rotation_auto_coupee():
+    m = n.Machine(n.Reglages(actif=False))
+    m.lancer_maintenant(0)
+    m.echec(1)
+    assert m.etat == n.ARRET
+
+
+# ------------------------------------------------------------- réglages en durée d'un tour
+def test_duree_tour_et_vitesse():
+    assert n.duree_tour_s(2.4) == pytest.approx(150)
+    assert n.vitesse_pour_tour(150) == pytest.approx(2.4)
+    assert n.vitesse_pour_tour(1) == 90 and n.vitesse_pour_tour(10_000) == 0.5
+
+
+# ------------------------------------------------------------- animation
+def test_animation_un_tour_qui_boucle():
+    vues = n.instants_animation(2.4)
+    assert vues[0] == (0.0, 0.0)
+    assert vues[-1][0] == pytest.approx(150) and vues[-1][1] == pytest.approx(360)
+    assert len(vues) == 73
+    ecarts = {round(b[0] - a[0], 9) for a, b in zip(vues, vues[1:])}
+    assert ecarts == {round(150 / 72, 9)}    # vitesse constante
+
+
+def test_animation_sens_inverse():
+    assert n.instants_animation(12, sens=-1)[-1] == (pytest.approx(30), pytest.approx(-360))

@@ -4,7 +4,7 @@ Bonjour Claude. Joue la recette automatique du plugin **CinematicCamera** dans F
 - Tu as le MCP de Fusion (il exécute du Python dans Fusion ouvert). Sinon, dis-le-moi en une phrase et arrête-toi.
 - Dossier du dépôt sur mon PC : `C:\Users\PC-ADMIN\Documents\GitHub\fusion360-cinematic-camera`. S'il n'existe pas, cherche-le avec Python dans Fusion (le dossier qui contient `essai\recette\recette.py`, sous `C:\Users`) et utilise ce chemin partout à la place de `<DEPOT>`.
 - Dépôt à jour : si tu as un outil pour lancer git, fais `git pull` dans `<DEPOT>` ; sinon demande-moi : « Ouvre GitHub Desktop → Fetch origin → Pull origin ».
-- Add-in lancé : en Python, `adsk.core.Application.get().userInterface.commandDefinitions.itemById("lmchdCinematicCamera_basculer")` ne doit pas être `None`. Sinon, ou si tu viens de mettre le dépôt à jour, demande-moi : « Utilitaires → Scripts et compléments → Compléments → CinematicCamera → Arrêter puis Exécuter ».
+- Add-in lancé : en Python, `adsk.core.Application.get().userInterface.commandDefinitions.itemById("lmchdCinematicCamera_lancer")` ne doit pas être `None`. Sinon, ou si tu viens de mettre le dépôt à jour, demande-moi : « Utilitaires → Scripts et compléments → Compléments → CinematicCamera → Arrêter puis Exécuter ».
 - Dis-moi : « Je lance la recette : lâche la souris et le clavier pendant 3 minutes, ne m'écris rien. Un document de test va s'ouvrir, la vue va tourner puis s'arrêter, et il se fermera sans rien enregistrer ; tes documents ne sont pas touchés. » Puis lance aussitôt.
 
 **2. Lancement (un appel au MCP)**

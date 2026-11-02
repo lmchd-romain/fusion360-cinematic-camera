@@ -4,9 +4,9 @@
 	"id": "dfbacbf7-0f42-4666-8630-55efbbafa729",
 	"author": "lmchd-romain",
 	"description": {
-		"": "Preuve de concept : la vue tourne lentement autour du modèle quand l'utilisateur est absent."
+		"": "Caméra cinématique : rotation lente et douce autour du modèle, au bouton ou en absence ; crée aussi une animation de rotation."
 	},
-	"version": "0.1.1",
+	"version": "0.2.0",
 	"runOnStartup": false,
 	"supportedOS": "windows",
 	"editEnabled": true

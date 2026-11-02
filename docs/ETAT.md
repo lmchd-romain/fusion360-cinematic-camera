@@ -1,26 +1,37 @@
-# État — CinematicCamera (preuve de concept)
+# État — Caméra cinématique (CinematicCamera)
 
-Mis à jour le 2026-11-02 (0.1.1 : correction du départ « téléporté »).
+Mis à jour le 2026-11-02 (0.2.0 : dépôt dédié, réglages, lancement au bouton, animation).
 
-## Retour de Romain, premier essai dans Fusion (2026-11-02)
+## Historique
 
-« Ça fait juste une téléportation de la caméra », au lieu d'un déplacement lent et continu.
-Causes probables et corrections (0.1.1) :
+- Préversion **CameraAuto** dans `fusion360-test-proof-of-concept` (jusqu'à 0.1.1).
+- 0.1.1 : premier essai de Romain, « ça fait juste une téléportation ». Corrigé (cadrage calculé au lieu de
+  `isFitView`, `viewport.refresh()` à chaque pas, vitesse qui monte en douceur). **Romain : « ça fonctionne
+  nickel » [vérifié, 2026-11-02, rotation en absence].**
+- 0.2.0 : dépôt `fusion360-cinematic-camera`, nouveaux identifiants (GUID, commandes `lmchdCinematicCamera_*`).
 
-1. Cadrage d'essai par `isFitView` puis retour à la vue de départ dans le même tic : Fusion peut
-   l'appliquer d'un coup à l'écran. → Supprimé : cadrage calculé (sphère de la boîte du modèle + angle de
-   vue ; en orthographique, étendue mise à l'échelle de la zone visible mesurée).
-2. Vue jamais redessinée entre deux pas : seuls quelques pas, ou le dernier, pouvaient s'afficher.
-   → `viewport.refresh()` après chaque pas.
-3. Rotation lancée à pleine vitesse. → Vitesse qui monte de zéro en courbe en S pendant `recadrage_s`.
+## 0.2.0 — nouveautés à vérifier dans Fusion [supposé]
 
-À confirmer dans Fusion [supposé]. Si le saut reste : envoyer `CinematicCamera/journal.log` (ligne
-« rotation arrêtée … intervalle ms » = cadence réellement reçue).
+| Code | Geste | Attendu |
+|---|---|---|
+| V1 | Utilitaires → Compléments | boutons « Caméra cinématique » (promu) et « Réglages de la caméra cinématique », icônes nettes en clair et sombre |
+| V2 | Clic sur « Caméra cinématique » | la vue part en douceur tout de suite ; bouger la souris sans cliquer ne l'arrête pas ; le nom du bouton devient « Arrêter la caméra cinématique » |
+| V3 | Pendant V2 : un clic dans la vue, ou une touche | arrêt net |
+| V4 | Pendant V2 : molette (zoom) ou ViewCube | arrêt, la vue reste où l'utilisateur l'a mise |
+| V5 | Réglages : décocher « Rotation quand je m'absente », OK, attendre plus que le délai | rien ne tourne ; le bouton marche toujours |
+| V6 | Réglages : durée d'un tour 30 s, temps 10 s, OK, attendre 10 s | rotation seule, un tour en 30 s |
+| V7 | Espace Animation | panneau « CAMÉRA CINÉMATIQUE » : « Créer l'animation de rotation » et « Réglages » |
+| V8 | Clic sur « Créer l'animation de rotation » | nouveau storyboard, message « un tour complet en N s » ; Lecture : un tour régulier, sans pause à chaque vue, la fin rejoint le début |
+| V9 | `journal.log` après V8 | ligne « animation créée » ; « fin du storyboard » ≈ durée annoncée |
 
+Questions ouvertes de l'animation : Fusion crée-t-il bien une action de vue par vue enregistrée (playhead
+déplacé, enregistrement allumé) ? Les actions de vue ont-elles un ralenti en entrée et sortie (la rotation
+« pulserait » tous les 5°) ? Replis : vues plus espacées, ou export d'images par `saveAsImageFile` pour une
+vidéo hors Fusion.
 
 ## Fait
 
-- Add-in complet : bouton marche / arrêt, fil de surveillance + événement personnalisé, rotation avec
+- Add-in complet : bouton lancer / arrêter, dialogue de réglages, création d'animation, fil de surveillance + événement personnalisé, rotation avec
   voyage souple de 6 s vers le cadrage, arrêt net à la moindre saisie (retour à la vue d'avant en option),
   réglages JSON, journaux.
 - Calé sur le viewer MobPrez (relevé par la session chef de projet, `app-mobprez` @ cd5ccb4) : 2,4 °/s,

@@ -244,6 +244,29 @@ class Trajet:
         return self.etendue0 + (self.etendue1 - self.etendue0) * self.avancement(t_s)
 
 
+def duree_tour_s(vitesse_deg_s: float) -> float:
+    return 360.0 / vitesse_deg_s
+
+
+def vitesse_pour_tour(duree_s: float) -> float:
+    lo, hi = Reglages.BORNES["vitesse_deg_s"]
+    return min(hi, max(lo, 360.0 / max(duree_s, 1e-9)))
+
+
+PAS_ANIMATION_DEG = 5.0   # une vue enregistrée tous les 5° : la corde reste à 0,1 % du cercle
+
+
+def instants_animation(vitesse_deg_s: float, sens: int = 1,
+                       pas_deg: float = PAS_ANIMATION_DEG) -> list[tuple[float, float]]:
+    """Vues d'une animation d'un tour complet à vitesse constante : (temps s, angle °), de 0 à 360°.
+
+    La dernière vue est la première : l'animation boucle sans à-coup.
+    """
+    n = max(4, round(360.0 / pas_deg))
+    tour = duree_tour_s(vitesse_deg_s)
+    return [(tour * k / n, sens * 360.0 * k / n) for k in range(n + 1)]
+
+
 # ---------------------------------------------------------------- machine d'états
 ARRET, VEILLE, ROTATION = "arret", "veille", "rotation"
 
@@ -251,6 +274,7 @@ ARRET, VEILLE, ROTATION = "arret", "veille", "rotation"
 RIEN, DEMARRER, PAS, ARRETER = "rien", "demarrer", "pas", "arreter"
 
 REPRISE_S = 0.5  # inactivité sous ce seuil pendant la rotation = l'utilisateur est revenu
+GRACE_MANUEL_S = 0.4  # après le clic du bouton, le temps de relâcher la souris
 
 
 @dataclass
@@ -262,12 +286,22 @@ class Action:
 
 
 class Machine:
-    """Décide, à chaque tic, ce que la couche Fusion doit faire. Le temps est injecté."""
+    """Décide, à chaque tic, ce que la couche Fusion doit faire. Le temps est injecté.
+
+    Deux départs : automatique (après `delai_s` sans saisie, si `actif`) ou manuel (bouton). En automatique,
+    la moindre saisie arrête ; en manuel, la souris peut bouger, seul un clic ou une touche arrête.
+    """
 
     def __init__(self, reglages: Reglages):
         self.reglages = reglages
         self.etat = VEILLE if reglages.actif else ARRET
         self.t0 = 0.0
+        self.manuel = False
+        self.t_arret: float | None = None   # pas de départ auto avant delai_s après un arrêt
+
+    @property
+    def _repos(self) -> str:
+        return VEILLE if self.reglages.actif else ARRET
 
     def intervalle_tic_s(self) -> float:
         """Cadence demandée au fil de surveillance."""
@@ -275,38 +309,60 @@ class Machine:
             return 1.0 / self.reglages.cadence_hz
         return 0.5
 
+    def _arreter(self, maintenant_s: float | None) -> Action:
+        self.etat = self._repos
+        self.manuel = False
+        self.t_arret = maintenant_s
+        return Action(ARRETER, restaurer=self.reglages.restaurer_vue)
+
     def basculer(self, actif: bool) -> Action:
+        """Rotation automatique permise ou non. N'arrête qu'une rotation automatique en cours."""
         self.reglages.actif = actif
-        if actif:
-            if self.etat == ARRET:
-                self.etat = VEILLE
+        if self.etat == ROTATION:
+            if not actif and not self.manuel:
+                return self._arreter(None)
             return Action(RIEN)
-        en_rotation = self.etat == ROTATION
-        self.etat = ARRET
-        return Action(ARRETER, restaurer=self.reglages.restaurer_vue) if en_rotation else Action(RIEN)
+        self.etat = self._repos
+        return Action(RIEN)
 
-    def etape(self, inactif_s: float | None, maintenant_s: float, occupe: bool = False) -> Action:
-        """inactif_s : secondes depuis la dernière saisie (None = inconnu → jamais de démarrage).
+    def lancer_maintenant(self, maintenant_s: float) -> Action:
+        """Bouton : démarre tout de suite ; s'il tourne déjà, arrête."""
+        if self.etat == ROTATION:
+            return self._arreter(maintenant_s)
+        self.etat = ROTATION
+        self.manuel = True
+        self.t0 = maintenant_s
+        return Action(DEMARRER)
 
-        occupe : une commande est en cours ou aucun modèle n'est affiché → ne pas démarrer.
+    def etape(self, inactif_s: float | None, maintenant_s: float, occupe: bool = False,
+              appui: bool = False) -> Action:
+        """inactif_s : secondes depuis la dernière saisie (None = inconnu → jamais de départ automatique).
+
+        occupe : une commande est en cours ou aucun modèle n'est affiché.
+        appui : un bouton de souris ou une touche est enfoncé en ce moment.
         """
         if self.etat == ARRET:
             return Action(RIEN)
         if self.etat == VEILLE:
-            if inactif_s is not None and not occupe and inactif_s >= self.reglages.delai_s:
+            repose = self.t_arret is None or maintenant_s - self.t_arret >= self.reglages.delai_s
+            if inactif_s is not None and not occupe and repose and inactif_s >= self.reglages.delai_s:
                 self.etat = ROTATION
+                self.manuel = False
                 self.t0 = maintenant_s
                 return Action(DEMARRER)
             return Action(RIEN)
         # ROTATION
-        if inactif_s is None or inactif_s < REPRISE_S or occupe:
-            self.etat = VEILLE
-            return Action(ARRETER, restaurer=self.reglages.restaurer_vue)
-        r = self.reglages
         t = maintenant_s - self.t0
+        if self.manuel:
+            if occupe or (appui and t >= GRACE_MANUEL_S):
+                return self._arreter(maintenant_s)
+        elif inactif_s is None or inactif_s < REPRISE_S or occupe or appui:
+            return self._arreter(maintenant_s)
+        r = self.reglages
         return Action(PAS, angle_deg=angle_au_temps(t, r.vitesse_deg_s, r.sens, r.recadrage_s), t_s=t)
 
-    def echec(self) -> None:
-        """La couche Fusion n'a pas pu appliquer l'action : retour en veille sans tourner."""
+    def echec(self, maintenant_s: float | None = None) -> None:
+        """La couche Fusion n'a pas pu appliquer l'action, ou la vue a été bougée par quelqu'un d'autre :
+        retour au repos sans tourner."""
         if self.etat == ROTATION:
-            self.etat = VEILLE
+            self._arreter(maintenant_s)
