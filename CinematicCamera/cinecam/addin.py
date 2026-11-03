@@ -10,7 +10,7 @@ from pathlib import Path
 import adsk.core
 
 from . import mouvements, noyau, reglages_fichier
-from .fusion_camera import PiloteCamera, boite_de
+from .fusion_camera import PiloteCamera, boite_de, boite_modele, design_actif, normale_sortante
 from .inactivite import creer_lecteur, creer_lecteur_appuis
 from .journal import journal, fermer
 
@@ -226,6 +226,34 @@ class GestionReglagesFin(adsk.core.CommandEventHandler):
 
 # ---------------------------------------------------------------- animation
 IN_MOUVEMENT, IN_DUREE, IN_ZOOM, IN_FOV, IN_CIBLE = "mouvement", "duree", "zoom", "fov", "cible"
+IN_AVANT, IN_DESSUS = "face_avant", "face_dessus"
+_faces_memo: dict = {}   # document → (jeton face avant, jeton face du dessus), le temps de la session
+
+
+def _cle_document(app) -> str:
+    doc = app.activeDocument
+    return getattr(doc, "creationId", None) or getattr(doc, "name", "") if doc else ""
+
+
+def _face_selection(inputs, id_, nom, invite, jeton, info):
+    sel = inputs.addSelectionInput(id_, nom, invite)
+    sel.addSelectionFilter("PlanarFaces")
+    sel.setSelectionLimits(0, 1)
+    sel.tooltip = info
+    if jeton:
+        try:
+            design = design_actif(_etat["app"])
+            trouves = design.findEntityByToken(jeton) if design else []
+            if trouves:
+                sel.addSelection(trouves[0])
+        except Exception:
+            journal().info("face mémorisée introuvable : %s", id_)
+    return sel
+
+
+def _face_choisie(inputs, id_):
+    sel = adsk.core.SelectionCommandInput.cast(inputs.itemById(id_))
+    return sel.selection(0).entity if sel and sel.selectionCount else None
 
 
 class GestionAnimation(adsk.core.CommandCreatedEventHandler):
@@ -256,6 +284,13 @@ class GestionAnimation(adsk.core.CommandCreatedEventHandler):
             fov.tooltip = ("Objectif de la caméra : 0 = celui de la vue actuelle ; 15 = téléobjectif (aplati) ; "
                            "45 = normal ; 90 = grand angle (perspective exagérée). Les mouvements à effet "
                            "d'objectif (Vertigo, Grand angle…) gardent le leur.")
+            jetons = _faces_memo.get(_cle_document(_etat["app"]), (None, None))
+            _face_selection(inputs, IN_AVANT, "Face avant", "Face avant du meuble (facultatif)", jetons[0],
+                            "Facultatif : cliquer la face avant du meuble (une façade). Les mouvements partent de "
+                            "ce côté. Sans choix : le côté vers lequel la vue est tournée. Gardée pour ce document.")
+            _face_selection(inputs, IN_DESSUS, "Face du dessus", "Dessus du meuble (facultatif)", jetons[1],
+                            "Facultatif : cliquer le dessus du meuble, si le modèle est couché ou à l'envers. "
+                            "Sans choix : le haut de Fusion. Gardée pour ce document.")
             cible = inputs.addSelectionInput(IN_CIBLE, "Cadrer sur", "Pièces à filmer (facultatif)")
             cible.addSelectionFilter("Occurrences")
             cible.addSelectionFilter("SolidBodies")
@@ -310,9 +345,16 @@ class GestionAnimationOK(adsk.core.CommandEventHandler):
                 _appliquer(machine._arreter(time.monotonic()))
             sel = adsk.core.SelectionCommandInput.cast(inputs.itemById(IN_CIBLE))
             boite = boite_de([sel.selection(i).entity for i in range(sel.selectionCount)]) if sel else None
-            animation.verifier(_etat["app"])
+            app = _etat["app"]
+            face_avant, face_dessus = _face_choisie(inputs, IN_AVANT), _face_choisie(inputs, IN_DESSUS)
+            _faces_memo[_cle_document(app)] = tuple(getattr(f, "entityToken", None) if f else None
+                                                    for f in (face_avant, face_dessus))
+            boite_modele_entier = boite_modele(app)
+            centre = noyau.centre_boite(*boite_modele_entier) if boite_modele_entier else None
+            normales = tuple(normale_sortante(f, centre) if f else None for f in (face_avant, face_dessus))
+            animation.verifier(app)
             _etat["animation_resultat"] = {}
-            _etat["animation"] = animation.etapes(_etat["app"], r, journal(), _etat["animation_resultat"], boite)
+            _etat["animation"] = animation.etapes(app, r, journal(), _etat["animation_resultat"], boite, normales)
             _relancer_le_fil()
             journal().info("animation demandée : %s, %.0f s, zoom %.0f %%", r.anim_mouvement, r.anim_duree_s,
                            r.anim_zoom_pct)

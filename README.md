@@ -40,6 +40,11 @@ Add-in Fusion : la vue tourne lentement autour du modèle, en douceur, comme une
   15 téléobjectif, 45 normal, 90 grand angle). Les mouvements à effet d'objectif gardent le leur. Après la
   création, la vue reprend son angle de départ.
 
+  **Face avant / Face du dessus** (facultatives) : cliquer la façade du meuble, et son dessus s'il est
+  modélisé couché ou à l'envers. Les mouvements partent alors de la façade, quel que soit le sens de
+  modélisation. Sans choix : le côté vers lequel la vue est tournée, et le haut de Fusion. Les faces sont
+  gardées pour le document tant que Fusion reste ouvert.
+
   **Cadrer sur** (facultatif) : choisir une ou plusieurs pièces ; le mouvement tourne autour d'elles au
   lieu du modèle entier (avec « Approche lente » : gros plan sur un détail).
 

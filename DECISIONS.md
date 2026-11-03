@@ -29,3 +29,6 @@ Décisions produit (**décidé** = Romain ; **mon choix** = l'agent, contestable
   angle d'avant après la création.
 - 2026-11-02 (mon choix, à essayer) : six mouvements dynamiques à objectif variable : orbite éclair, transitions
   warp, pulsation rythmée, vertigo en orbite, chute grand angle, montage dynamique.
+- 2026-11-03 (décidé) : choisir la face avant ; (mon choix) aussi la face du dessus, pour un modèle couché ;
+  faces gardées par document le temps de la session, rien écrit dans le fichier.
+- 2026-11-03 (mon choix) : enregistrement des vues rallumé en fin de création (plus de « View is not recording »).

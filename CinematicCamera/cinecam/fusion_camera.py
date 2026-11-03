@@ -89,6 +89,24 @@ def boite_de(entites) -> tuple[noyau.Vec, noyau.Vec] | None:
     return mini, maxi
 
 
+def normale_sortante(face, centre: noyau.Vec | None = None) -> noyau.Vec | None:
+    """Normale d'une face plane, tournée vers l'extérieur (vers l'œil qui regarde cette face).
+
+    `getNormalAtPoint` ne garantit pas le sens : on la retourne si elle pointe vers le centre du modèle.
+    """
+    try:
+        point = face.pointOnFace
+        ok, n = face.evaluator.getNormalAtPoint(point)
+        if not ok:
+            return None
+        v = (n.x, n.y, n.z)
+    except Exception:
+        return None
+    if centre is not None and noyau.scalaire(v, noyau.soustrait(_vec(point), centre)) < 0:
+        v = noyau.echelle(v, -1.0)
+    return v
+
+
 def centre_modele(app) -> noyau.Vec | None:
     """Centre de la boîte englobante du composant racine, ou None."""
     boite = boite_modele(app)

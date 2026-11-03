@@ -1,6 +1,6 @@
 # État — Caméra cinématique (CinematicCamera)
 
-Mis à jour le 2026-11-02 (0.6.0 : mouvements dynamiques à objectif variable).
+Mis à jour le 2026-11-03 (0.7.0 : face avant / dessus, plus de « View is not recording »).
 
 ## Historique
 
@@ -65,6 +65,22 @@ Objectif jusqu'à 115° ; la caméra reste hors de la sphère qui englobe le mod
 | Z1 | Orbite éclair, Transitions warp | sensation d'accélération ; coupe nette au sommet de l'étirement |
 | Z2 | Pulsation rythmée à 4 s | huit coups d'objectif réguliers |
 | Z3 | Montage dynamique | six plans, coupes franches, aucun plan à l'intérieur du modèle |
+
+## 0.7.0 [supposé]
+
+- « View is not recording » en rouge après chaque création [vérifié, Romain] : l'add-in éteignait
+  l'enregistrement des vues à la fin. Il le rallume désormais (état par défaut de l'espace Animation),
+  après le dernier changement de vue : rien de plus n'est enregistré.
+- Face avant et face du dessus, facultatives, dans le dialogue : orientent les mouvements quel que soit le
+  sens de modélisation. Normale sortante vérifiée par le centre du modèle. Mémorisées par document, en
+  mémoire seulement (rien n'est écrit dans le fichier).
+
+| Code | Geste | Attendu |
+|---|---|---|
+| F1 | Créer une animation, puis regarder la vue | plus de texte rouge « View is not recording » |
+| F2 | Face avant = façade, vue tournée vers l'arrière, Platine | l'animation commence face à la façade |
+| F3 | Meuble couché, Face du dessus = son dessus | rotation autour du vrai haut du meuble |
+| F4 | Rouvrir le dialogue | les deux faces déjà choisies |
 
 ## Mouvement des pièces (éclaté, ordre de montage, portes, tiroirs, couvercle)
 

@@ -145,3 +145,40 @@ def test_warp_coupe_au_sommet_de_l_etirement():
               if n.norme(n.soustrait(b.pose.oeil, a.pose.oeil)) > 0.2 * REP_R.distance]
     assert len(coupes) == 2
     assert all(a.fov == pytest.approx(115) and b.fov == pytest.approx(115) for a, b in coupes)
+
+
+# ------------------------------------------------------------- orientation (face avant, dessus)
+def test_orienter_par_defaut_garde_le_cote_de_la_vue():
+    haut, devant, cote = m.orienter((0, 0, 1), (0.6, 0.8, 0.0))
+    assert haut == (0, 0, 1) and proche(devant, (0.6, 0.8, 0)) and proche(cote, (-0.8, 0.6, 0))
+
+
+def test_orienter_face_avant_modelisee_a_l_envers():
+    # Façade du meuble tournée vers +Y, vue actuelle vers -Y : les mouvements partent de la façade.
+    haut, devant, _ = m.orienter((0, 0, 1), (0, -1, 0), avant=(0, 1, 0))
+    assert proche(devant, (0, 1, 0))
+
+
+def test_orienter_meuble_couche():
+    # Modèle couché : son dessus regarde +Y, sa façade +Z.
+    haut, devant, cote = m.orienter((0, 0, 1), (1, 0, 0), dessus=(0, 1, 0), avant=(0, 0, 1))
+    assert proche(haut, (0, 1, 0)) and proche(devant, (0, 0, 1)) and proche(cote, (1, 0, 0))
+
+
+def test_orienter_face_avant_horizontale_ignoree():
+    haut, devant, _ = m.orienter((0, 0, 1), (1, 0, 0), avant=(0, 0, 1))   # le dessus cliqué comme façade
+    assert proche(devant, (1, 0, 0))
+
+
+def test_normale_sortante_retournee_si_elle_rentre():
+    import sys
+    import types
+
+    from tests import faux_adsk
+    if "adsk" not in sys.modules:
+        faux_adsk.installer()
+    from cinecam import fusion_camera as fc
+    P = lambda x, y, z: types.SimpleNamespace(x=x, y=y, z=z)  # noqa: E731
+    face = types.SimpleNamespace(pointOnFace=P(0, 10, 5),
+                                 evaluator=types.SimpleNamespace(getNormalAtPoint=lambda p: (True, P(0, -1, 0))))
+    assert fc.normale_sortante(face, (0, 0, 5)) == (0, 1, 0)

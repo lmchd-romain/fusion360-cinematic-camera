@@ -14,7 +14,7 @@ import math
 from dataclasses import dataclass, field
 from typing import Callable
 
-from .noyau import Pose, Reglages, Vec, ajoute, echelle, norme, soustrait
+from .noyau import Pose, Reglages, Vec, ajoute, echelle, norme, scalaire, soustrait, unitaire, vectoriel
 
 COUPE_S = 0.04            # durée d'un changement de plan franc (un peu plus d'une image à 25 i/s)
 ECART_MAX = 0.06          # écart d'œil maximal entre deux vues, en part de la distance de cadrage
@@ -328,6 +328,27 @@ def pose(rep: Repere, c: Cadre, zoom: float = 1.0, fov: float | None = None) -> 
         angle = min(FOV_BORNES[1], max(FOV_BORNES[0], c.fov or fov or rep.angle))
         distance *= math.sin(math.radians(rep.angle) / 2) / math.sin(math.radians(angle) / 2)
     return Pose(ajoute(cible, echelle(direction, distance * facteur)), cible, rep.axe), facteur, angle
+
+
+def orienter(axe: Vec, devant: Vec, dessus: Vec | None = None, avant: Vec | None = None) -> tuple[Vec, Vec, Vec]:
+    """(haut, devant, côté) du repère des mouvements.
+
+    `dessus` : normale de la face choisie comme dessus du meuble (sinon l'axe vertical de Fusion).
+    `avant` : normale de la face choisie comme face avant (sinon le côté de la vue actuelle). Ramenée à
+    l'horizontale ; si elle est presque verticale, le côté de la vue actuelle reste.
+    """
+    haut = unitaire(dessus) if dessus is not None and norme(dessus) > 1e-9 else unitaire(axe)
+
+    def a_plat(v):
+        h = soustrait(v, echelle(haut, scalaire(v, haut)))
+        return unitaire(h) if norme(h) > 0.2 * norme(v) else None
+
+    face = a_plat(avant) if avant is not None and norme(avant) > 1e-9 else None
+    devant_plat = face or a_plat(devant)
+    if devant_plat is None:     # vue actuelle de dessus ou de dessous : un côté quelconque
+        aide = (1.0, 0.0, 0.0) if abs(haut[0]) < 0.9 else (0.0, 1.0, 0.0)
+        devant_plat = unitaire(vectoriel(haut, aide))
+    return haut, devant_plat, vectoriel(haut, devant_plat)
 
 
 @dataclass(frozen=True)
