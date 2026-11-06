@@ -125,3 +125,33 @@ def test_vertigo_angle_de_vue_garde_et_rendu(module, monkeypatch):
     animation, noyau = module
     sb, r, _ = jouer(animation, noyau, monkeypatch, "toujours", anim_mouvement="vertigo", anim_duree_s=10.0)
     assert r["fov_garde"] is True
+
+
+def test_apercu_joue_puis_rend_la_vue(module, monkeypatch):
+    animation, noyau = module
+    from cinecam import mouvements
+    rep = mouvements.Repere((0, 0, 0), 50.0, 146.0, (0, 0, 1), (1, 0, 0), (0, 1, 0), 40.0)
+    vues = mouvements.cles(mouvements.PAR_NOM["vertigo"], 0.2, rep)
+    poses, rendus = [], []
+    vue = types.SimpleNamespace(refresh=lambda: None, camera=None)
+
+    class Pilote:
+        camera_avant = types.SimpleNamespace(isSmoothTransition=True)
+
+        def __init__(self):
+            self.vue = vue
+
+        def _appliquer(self, pose, etendue=None, angle_deg=None):
+            poses.append(angle_deg)
+
+        def poser_angle(self, a):
+            rendus.append(a)
+
+    prepa = animation.Preparation(Pilote(), vues, None, 40.0, mouvements.PAR_NOM["vertigo"])
+    monkeypatch.setattr(animation, "preparer_vues", lambda *a, **k: prepa)
+    ap = animation.Apercu(None, noyau.Reglages(), None)
+    while ap.pas():
+        pass
+    ap.rendre()
+    assert poses and rendus == [40.0] and vue.camera is Pilote.camera_avant
+    assert Pilote.camera_avant.isSmoothTransition is False

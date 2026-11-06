@@ -32,3 +32,6 @@ Décisions produit (**décidé** = Romain ; **mon choix** = l'agent, contestable
 - 2026-11-03 (décidé) : choisir la face avant ; (mon choix) aussi la face du dessus, pour un modèle couché ;
   faces gardées par document le temps de la session, rien écrit dans le fichier.
 - 2026-11-03 (mon choix) : enregistrement des vues rallumé en fin de création (plus de « View is not recording »).
+- 2026-11-06 (décidé) : aperçu direct du mouvement avant création. (mon choix) bouton « Aperçu » dans le
+  dialogue d'animation, vue rendue à la fin ; vues nommées, rotation au choix et export GIF non retenus pour
+  l'instant.

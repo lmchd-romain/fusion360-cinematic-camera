@@ -389,3 +389,29 @@ def cles(mouvement: Mouvement, duree_s: float, rep: Repere, zoom: float = 1.0,
             res.append(derniere)
         t_debut += d
     return res
+
+
+def interpoler(vues: list[Cle], t: float) -> tuple[Pose, float, float | None]:
+    """Pose à l'instant t, en ligne droite entre deux vues clés (comme Fusion entre deux actions de vue)."""
+    if t <= vues[0].t:
+        c = vues[0]
+        return c.pose, c.facteur, c.fov
+    if t >= vues[-1].t:
+        c = vues[-1]
+        return c.pose, c.facteur, c.fov
+    bas, haut = 0, len(vues) - 1
+    while haut - bas > 1:
+        milieu = (bas + haut) // 2
+        if vues[milieu].t <= t:
+            bas = milieu
+        else:
+            haut = milieu
+    a, b = vues[bas], vues[haut]
+    s = (t - a.t) / (b.t - a.t) if b.t > a.t else 1.0
+
+    def mix(u, v):
+        return tuple(x + (y - x) * s for x, y in zip(u, v))
+
+    fov = None if a.fov is None or b.fov is None else a.fov + (b.fov - a.fov) * s
+    return (Pose(mix(a.pose.oeil, b.pose.oeil), mix(a.pose.cible, b.pose.cible), a.pose.haut),
+            a.facteur + (b.facteur - a.facteur) * s, fov)

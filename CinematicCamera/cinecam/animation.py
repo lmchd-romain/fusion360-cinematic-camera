@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import math
 import time
+from dataclasses import dataclass
 
 from . import mouvements, noyau
 from .fusion_camera import PiloteCamera, _est_ortho, boite_modele, design_actif
@@ -66,6 +67,71 @@ def _commandes_enregistrement(ui) -> list[str]:
     return trouves[:40]
 
 
+@dataclass
+class Preparation:
+    pilote: PiloteCamera
+    vues: list
+    etendue: float | None
+    angle0: float | None
+    mouvement: mouvements.Mouvement
+
+    def __iter__(self):
+        return iter((self.pilote, self.vues, self.etendue, self.angle0, self.mouvement))
+
+
+def preparer_vues(app, reglages: noyau.Reglages, log, boite=None, normales=None) -> Preparation:
+    """Vues clés du mouvement choisi, depuis la vue actuelle, sans toucher à la vue. Lève ErreurAnimation."""
+    pilote = PiloteCamera(app, log)
+    trajet = pilote.preparer(reglages, 0.0, boite)   # repère du modèle (ou des pièces choisies)
+    if trajet is None:
+        raise ErreurAnimation("Aucune vue active.")
+    mouvement = mouvements.PAR_NOM.get(reglages.anim_mouvement, mouvements.CATALOGUE[0])
+    avant = pilote.camera_avant
+    angle0 = None if _est_ortho(avant) else math.degrees(avant.perspectiveAngle)
+    n_avant, n_dessus = normales or (None, None)
+    haut, devant, cote = mouvements.orienter(trajet.axe, trajet.h0, n_dessus, n_avant)
+    log.info("animation : orientation haut %s, devant %s (face avant %s, dessus %s)", haut, devant, n_avant, n_dessus)
+    rep = mouvements.Repere(trajet.cible1, pilote.rayon, trajet.distance1, haut, devant, cote, angle0)
+    fov = reglages.anim_fov_deg if reglages.anim_fov_deg >= mouvements.FOV_BORNES[0] else None
+    vues = mouvements.cles(mouvement, reglages.anim_duree_s, rep, reglages.anim_zoom_pct / 100.0, fov)
+    etendue = trajet.etendue(0.0)
+    log.info("animation : mouvement %s, %.0f s, zoom %.0f %%, angle de vue %s → %s, %d vues", mouvement.nom,
+             reglages.anim_duree_s, reglages.anim_zoom_pct, angle0, fov, len(vues))
+    return Preparation(pilote, vues, etendue, angle0, mouvement)
+
+
+class Apercu:
+    """Joue le mouvement en direct dans la vue, sans storyboard, puis rend la vue de départ."""
+
+    def __init__(self, app, reglages: noyau.Reglages, log, boite=None, normales=None):
+        self.p = preparer_vues(app, reglages, log, boite, normales)
+        self.t0 = time.perf_counter()
+
+    @property
+    def duree(self) -> float:
+        return self.p.vues[-1].t
+
+    def pas(self) -> bool:
+        """Un pas ; faux quand le mouvement est fini."""
+        t = time.perf_counter() - self.t0
+        pose, facteur, fov = mouvements.interpoler(self.p.vues, t)
+        etendue = None if self.p.etendue is None else self.p.etendue * facteur
+        self.p.pilote._appliquer(pose, etendue=etendue, angle_deg=fov)
+        self.p.pilote.vue.refresh()
+        return t < self.duree
+
+    def rendre(self) -> None:
+        """La vue d'avant l'aperçu, angle de vue compris (l'angle d'abord, la position ensuite)."""
+        pilote = self.p.pilote
+        if self.p.angle0 is not None:
+            pilote.poser_angle(self.p.angle0)
+        avant = pilote.camera_avant
+        avant.isSmoothTransition = False
+        pilote.vue.camera = avant
+        pilote.vue.camera = avant
+        pilote.vue.refresh()
+
+
 def etapes(app, reglages: noyau.Reglages, log, resultat: dict, boite=None, normales=None):
     """Générateur : crée le storyboard pas à pas. Remplit `resultat` (duree, vues, methode) en cas de succès.
 
@@ -90,22 +156,7 @@ def etapes(app, reglages: noyau.Reglages, log, resultat: dict, boite=None, norma
              storyboard.isViewRecordingOn, storyboard.playheadPosition, _fin(storyboard),
              getattr(gestion, "recordingMode", "?"))
 
-    pilote = PiloteCamera(app, log)
-    trajet = pilote.preparer(reglages, 0.0, boite)   # repère du modèle (ou des pièces choisies)
-    if trajet is None:
-        raise ErreurAnimation("Aucune vue active.")
-    mouvement = mouvements.PAR_NOM.get(reglages.anim_mouvement, mouvements.CATALOGUE[0])
-    avant = pilote.camera_avant
-    angle0 = None if _est_ortho(avant) else math.degrees(avant.perspectiveAngle)
-    n_avant, n_dessus = normales or (None, None)
-    haut, devant, cote = mouvements.orienter(trajet.axe, trajet.h0, n_dessus, n_avant)
-    log.info("animation : orientation haut %s, devant %s (face avant %s, dessus %s)", haut, devant, n_avant, n_dessus)
-    rep = mouvements.Repere(trajet.cible1, pilote.rayon, trajet.distance1, haut, devant, cote, angle0)
-    fov = reglages.anim_fov_deg if reglages.anim_fov_deg >= mouvements.FOV_BORNES[0] else None
-    vues = mouvements.cles(mouvement, reglages.anim_duree_s, rep, reglages.anim_zoom_pct / 100.0, fov)
-    etendue = trajet.etendue(0.0)
-    log.info("animation : mouvement %s, %.0f s, zoom %.0f %%, angle de vue %s → %s, %d vues", mouvement.nom,
-             reglages.anim_duree_s, reglages.anim_zoom_pct, angle0, fov, len(vues))
+    pilote, vues, etendue, angle0, mouvement = preparer_vues(app, reglages, log, boite, normales)
 
     for methode in METHODES:
         storyboard.isViewRecordingOn = True

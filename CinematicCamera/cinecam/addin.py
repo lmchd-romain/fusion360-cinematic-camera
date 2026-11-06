@@ -85,8 +85,8 @@ def _appliquer(action: noyau.Action) -> None:
 def _relancer_le_fil() -> None:
     veilleur = _etat.get("veilleur")
     if veilleur is not None and "machine" in _etat:
-        veilleur.intervalle_s = (1 / 30 if _etat.get("animation") is not None
-                                 else _etat["machine"].intervalle_tic_s())
+        occupe = _etat.get("animation") is not None or _etat.get("apercu") is not None
+        veilleur.intervalle_s = 1 / 30 if occupe else _etat["machine"].intervalle_tic_s()
 
 
 def _pas_animation() -> None:
@@ -119,6 +119,9 @@ class GestionTic(adsk.core.CustomEventHandler):
         try:
             if _etat.get("animation") is not None:
                 _pas_animation()
+                return
+            if _etat.get("apercu") is not None:
+                _pas_apercu()
                 return
             app, ui = _etat["app"], _etat["ui"]
             machine: noyau.Machine = _etat["machine"]
@@ -226,7 +229,7 @@ class GestionReglagesFin(adsk.core.CommandEventHandler):
 
 # ---------------------------------------------------------------- animation
 IN_MOUVEMENT, IN_DUREE, IN_ZOOM, IN_FOV, IN_CIBLE = "mouvement", "duree", "zoom", "fov", "cible"
-IN_AVANT, IN_DESSUS = "face_avant", "face_dessus"
+IN_AVANT, IN_DESSUS, IN_APERCU = "face_avant", "face_dessus", "apercu"
 _faces_memo: dict = {}   # document → (jeton face avant, jeton face du dessus), le temps de la session
 
 
@@ -296,8 +299,12 @@ class GestionAnimation(adsk.core.CommandCreatedEventHandler):
             cible.addSelectionFilter("SolidBodies")
             cible.setSelectionLimits(0, 0)
             cible.tooltip = "Facultatif : choisir une ou plusieurs pièces. Sans choix, le modèle entier."
+            bouton = inputs.addBoolValueInput(IN_APERCU, "Aperçu", False, "", False)
+            bouton.text = "Jouer / arrêter"
+            bouton.tooltip = ("Joue le mouvement dans la vue, sans rien créer ; la vue revient ensuite où elle "
+                              "était. Un second clic, ou un changement de réglage, l'arrête.")
             for h, ev in ((GestionAnimationChange(), cmd.inputChanged), (GestionAnimationOK(), cmd.execute),
-                          (GestionReglagesFin(), cmd.destroy)):
+                          (GestionAnimationFin(), cmd.destroy)):
                 ev.add(h)
                 _dialogue.append(h)
         except Exception:
@@ -310,10 +317,67 @@ def _mouvement_choisi(inputs) -> mouvements.Mouvement:
     return next((m for m in mouvements.CATALOGUE if m.libelle == nom), mouvements.CATALOGUE[0])
 
 
+def _lire_animation(inputs, reglages: noyau.Reglages):
+    """Champs du dialogue d'animation → réglages (mis à jour), boîte de « Cadrer sur », normales des faces."""
+    reglages.anim_mouvement = _mouvement_choisi(inputs).nom
+    for id_, champ in ((IN_DUREE, "anim_duree_s"), (IN_ZOOM, "anim_zoom_pct"), (IN_FOV, "anim_fov_deg")):
+        setattr(reglages, champ, float(adsk.core.IntegerSpinnerCommandInput.cast(inputs.itemById(id_)).value))
+    sel = adsk.core.SelectionCommandInput.cast(inputs.itemById(IN_CIBLE))
+    boite = boite_de([sel.selection(i).entity for i in range(sel.selectionCount)]) if sel else None
+    app = _etat["app"]
+    face_avant, face_dessus = _face_choisie(inputs, IN_AVANT), _face_choisie(inputs, IN_DESSUS)
+    _faces_memo[_cle_document(app)] = tuple(getattr(f, "entityToken", None) if f else None
+                                            for f in (face_avant, face_dessus))
+    boite_modele_entier = boite_modele(app)
+    centre = noyau.centre_boite(*boite_modele_entier) if boite_modele_entier else None
+    normales = tuple(normale_sortante(f, centre) if f else None for f in (face_avant, face_dessus))
+    return boite, normales
+
+
+def _arreter_apercu() -> None:
+    """Fin de l'aperçu : la vue revient où elle était."""
+    apercu = _etat.pop("apercu", None)
+    if apercu is not None:
+        try:
+            apercu.rendre()
+        except Exception:
+            journal().error("aperçu, retour :\n%s", traceback.format_exc())
+    _relancer_le_fil()
+
+
+def _pas_apercu() -> None:
+    try:
+        if not _etat["apercu"].pas():
+            _arreter_apercu()
+    except Exception:
+        journal().error("aperçu :\n%s", traceback.format_exc())
+        _arreter_apercu()
+
+
 class GestionAnimationChange(adsk.core.InputChangedEventHandler):
     def notify(self, args):
+        from . import animation
         try:
             a = adsk.core.InputChangedEventArgs.cast(args)
+            if a.input.id == IN_APERCU:
+                if _etat.get("apercu") is not None:
+                    _arreter_apercu()
+                    return
+                machine: noyau.Machine = _etat["machine"]
+                if machine.etat == noyau.ROTATION:
+                    _appliquer(machine._arreter(time.monotonic()))
+                reglages = noyau.Reglages.depuis_dict(machine.reglages.vers_dict())
+                boite, normales = _lire_animation(a.inputs, reglages)
+                try:
+                    _etat["apercu"] = animation.Apercu(_etat["app"], reglages, journal(), boite, normales)
+                except animation.ErreurAnimation as e:
+                    _etat["ui"].messageBox(str(e), "Caméra cinématique")
+                    return
+                _relancer_le_fil()
+                journal().info("aperçu : %s, %.0f s", reglages.anim_mouvement, reglages.anim_duree_s)
+                return
+            if _etat.get("apercu") is not None:      # un réglage change : l'aperçu s'arrête
+                _arreter_apercu()
             if a.input.id != IN_MOUVEMENT:
                 return
             m = _mouvement_choisi(a.inputs)
@@ -321,6 +385,12 @@ class GestionAnimationChange(adsk.core.InputChangedEventHandler):
             adsk.core.IntegerSpinnerCommandInput.cast(a.inputs.itemById(IN_DUREE)).value = int(m.duree_defaut_s)
         except Exception:
             journal().error("animation, changement :\n%s", traceback.format_exc())
+
+
+class GestionAnimationFin(adsk.core.CommandEventHandler):
+    def notify(self, args):
+        _arreter_apercu()
+        _dialogue.clear()
 
 
 class GestionAnimationOK(adsk.core.CommandEventHandler):
@@ -331,27 +401,17 @@ class GestionAnimationOK(adsk.core.CommandEventHandler):
         from . import animation
         ui = _etat["ui"]
         try:
+            _arreter_apercu()                        # la création part de la vue d'avant l'aperçu
             if _etat.get("animation") is not None:
                 return
             inputs = adsk.core.CommandEventArgs.cast(args).command.commandInputs
             machine: noyau.Machine = _etat["machine"]
             r = machine.reglages
-            r.anim_mouvement = _mouvement_choisi(inputs).nom
-            r.anim_duree_s = float(adsk.core.IntegerSpinnerCommandInput.cast(inputs.itemById(IN_DUREE)).value)
-            r.anim_zoom_pct = float(adsk.core.IntegerSpinnerCommandInput.cast(inputs.itemById(IN_ZOOM)).value)
-            r.anim_fov_deg = float(adsk.core.IntegerSpinnerCommandInput.cast(inputs.itemById(IN_FOV)).value)
+            boite, normales = _lire_animation(inputs, r)
             reglages_fichier.ecrire(FICHIER_REGLAGES, r)
             if machine.etat == noyau.ROTATION:
                 _appliquer(machine._arreter(time.monotonic()))
-            sel = adsk.core.SelectionCommandInput.cast(inputs.itemById(IN_CIBLE))
-            boite = boite_de([sel.selection(i).entity for i in range(sel.selectionCount)]) if sel else None
             app = _etat["app"]
-            face_avant, face_dessus = _face_choisie(inputs, IN_AVANT), _face_choisie(inputs, IN_DESSUS)
-            _faces_memo[_cle_document(app)] = tuple(getattr(f, "entityToken", None) if f else None
-                                                    for f in (face_avant, face_dessus))
-            boite_modele_entier = boite_modele(app)
-            centre = noyau.centre_boite(*boite_modele_entier) if boite_modele_entier else None
-            normales = tuple(normale_sortante(f, centre) if f else None for f in (face_avant, face_dessus))
             animation.verifier(app)
             _etat["animation_resultat"] = {}
             _etat["animation"] = animation.etapes(app, r, journal(), _etat["animation_resultat"], boite, normales)
@@ -498,6 +558,8 @@ def run(context):
 
 def stop(context):
     log = journal()
+    if _etat.get("apercu") is not None:
+        _arreter_apercu()
     veilleur = _etat.pop("veilleur", None)
     if veilleur:
         veilleur.stop_demande.set()

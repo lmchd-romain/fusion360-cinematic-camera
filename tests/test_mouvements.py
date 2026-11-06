@@ -182,3 +182,12 @@ def test_normale_sortante_retournee_si_elle_rentre():
     face = types.SimpleNamespace(pointOnFace=P(0, 10, 5),
                                  evaluator=types.SimpleNamespace(getNormalAtPoint=lambda p: (True, P(0, -1, 0))))
     assert fc.normale_sortante(face, (0, 0, 5)) == (0, 1, 0)
+
+
+def test_interpoler_entre_deux_vues():
+    cles = m.cles(m.PAR_NOM["vertigo"], 10, REP_R)
+    a, b = cles[3], cles[4]
+    pose, facteur, fov = m.interpoler(cles, (a.t + b.t) / 2)
+    assert proche(pose.oeil, tuple((x + y) / 2 for x, y in zip(a.pose.oeil, b.pose.oeil)))
+    assert fov == pytest.approx((a.fov + b.fov) / 2)
+    assert m.interpoler(cles, -1)[0] == cles[0].pose and m.interpoler(cles, 99)[0] == cles[-1].pose

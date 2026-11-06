@@ -1,6 +1,6 @@
 # État — Caméra cinématique (CinematicCamera)
 
-Mis à jour le 2026-11-03 (0.7.0 : face avant / dessus, plus de « View is not recording »).
+Mis à jour le 2026-11-06 (0.8.0 : aperçu direct dans le dialogue d'animation).
 
 ## Historique
 
@@ -81,6 +81,19 @@ Objectif jusqu'à 115° ; la caméra reste hors de la sphère qui englobe le mod
 | F2 | Face avant = façade, vue tournée vers l'arrière, Platine | l'animation commence face à la façade |
 | F3 | Meuble couché, Face du dessus = son dessus | rotation autour du vrai haut du meuble |
 | F4 | Rouvrir le dialogue | les deux faces déjà choisies |
+
+## 0.8.0 — aperçu direct [supposé]
+
+Bouton « Aperçu » du dialogue : les mêmes vues clés que la création, jouées en direct par les tics (ligne
+droite entre deux vues, comme Fusion), puis vue et angle de vue rendus. Inconnu : Fusion traite-t-il les
+tics de l'événement personnalisé pendant qu'un dialogue est ouvert ? Si non, l'aperçu ne bouge pas.
+
+| Code | Geste | Attendu |
+|---|---|---|
+| A1 | Dialogue d'animation → Aperçu | le mouvement se joue dans la vue, dialogue ouvert |
+| A2 | Fin de l'aperçu, ou second clic | la vue revient exactement où elle était, angle de vue compris |
+| A3 | Changer la durée pendant l'aperçu | l'aperçu s'arrête, vue rendue |
+| A4 | Aperçu puis Créer | le storyboard part de la vue d'avant l'aperçu |
 
 ## Mouvement des pièces (éclaté, ordre de montage, portes, tiroirs, couvercle)
 
